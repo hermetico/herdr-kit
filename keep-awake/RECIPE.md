@@ -6,9 +6,9 @@ half a minute.
 
 ## What you see
 
-- A 15px cup icon, centered in a 32px status-bar block, in a 4px padded button with 5px corners.
+- An 18px cup icon, centered in a 36px status-bar block, in a 4px padded button with 5px corners.
 - Off: the cup in `dim`, `foreground` on hover. Tooltip "Keep the display awake".
-- On: the cup in `accent` on `raised`. Tooltip "Keeping the display awake. Click to let it sleep."
+- On: a filled cup, `cup-on.svg`, in `accent` on `raised`. Tooltip "Keeping the display awake. Click to let it sleep."
 - On Linux and Windows the block stays empty.
 
 ## How it behaves
@@ -19,9 +19,9 @@ half a minute.
 
 ## Built from
 
-- `mods/keep-awake/`: `main.js`, `mod.json` `{ "place": "none", "title": "Keep awake" }`, `cup.svg`.
+- `mods/keep-awake/`: `main.js`, `mod.json` `{ "place": "none", "title": "Keep awake" }`, `cup.svg` and `cup-on.svg`.
 - Placed in the layout's status row:
-  `{ "id": "keep-awake", "type": "block", "size": { "px": 32 }, "content": { "mod": "keep-awake" } }`.
+  `{ "id": "keep-awake", "type": "block", "size": { "px": 36 }, "content": { "mod": "keep-awake" } }`.
 - `herdr`: `exec`, `shared`, `setShared`, `theme`, `window`, `checking`. Program: `caffeinate`.
 
 ## Watch out

@@ -39,6 +39,6 @@ export default class KeepAwake extends View {
       .hover((s) => s.bg(t.hover).text_color(on ? t.accent : t.foreground))
       .tooltip(on ? "Keeping the display awake. Click to let it sleep." : "Keep the display awake")
       .on_click(() => this.toggle())
-      .child(svg("mods/keep-awake/cup.svg").size(15)));
+      .child(svg(`mods/keep-awake/${on ? "cup-on" : "cup"}.svg`).size(18)));
   }
 }
