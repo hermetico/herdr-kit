@@ -188,7 +188,8 @@ export default class Tasks extends View {
 
   bar(t) {
     const list = this.src ? items(this.src) : [];
-    const root = h_flex().size_full().min_w(0).px(10).gap(6).items_center().text_size(11.8).overflow_hidden();
+    // Right-aligned: in a fixed status-bar slot the chip sits next to whatever follows it.
+    const root = h_flex().size_full().min_w(0).px(10).gap(6).items_center().justify_end().text_size(11.8).overflow_hidden();
     if (!list.length) return root;
     // This folder's runs only: another workspace's tasks don't show here.
     const states = list.map((i) => this.stateOfKey(runKey(this.at?.machine, this.src.ws, i))).filter(Boolean);

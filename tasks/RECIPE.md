@@ -68,7 +68,8 @@ What runs:
   parsing, sources, items, steps, the `sh` script), `test_logic.mjs`, `mod.json`
   `{ "place": "none", "title": "Tasks" }`, and three stroke icons in `icons/`.
 - Placed as a block in the layout's status row:
-  `{ "id": "tasks", "type": "block", "size": { "weight": 2 }, "content": { "mod": "tasks" } }`.
+  `{ "id": "tasks", "type": "block", "size": { "px": 300 }, "content": { "mod": "tasks" } }`. The chip is
+  right-aligned in its block, so a fixed slot on the right of the status row keeps it next to what follows.
 - `herdr`: `spaces`, `panes`, `focused`, `readTextFile` and `exec` with `on`, `openOverlay`,
   `closeOverlay`, `shared`, `setShared`, `run`, `theme`, `window`, `home`, `props`.
 - Commands: `tab.new`, `tab.close`, `space.select`, `tab.select`. Programs: `find`, `sh`, and
