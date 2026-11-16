@@ -15,7 +15,7 @@ const BIG = "spotify-mini.big-cover";
 const PAD = 12;
 // Heights of the player's block: compact, expanded with the cover beside the text, and expanded with
 // the cover as wide as the block (its side, plus the rows under it).
-const HEIGHT = { compact: 66, expanded: 226, bigExtra: 216 };
+const HEIGHT = { compact: 66, expanded: 210, bigExtra: 176 };
 const FRONT_MS = 3000;
 const BACK_MS = 15000;
 const SEEK_STEPS = 1000;
@@ -256,11 +256,17 @@ export default class SpotifyMini extends View {
     const link = (id, icon, label, onClick) => h_flex().id(id).gap(4).items_center().px(5).py(2).rounded(4).cursor_pointer()
       .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => onClick(cx))
       .child(svg(`${ICON}/${icon}.svg`).size(11)).child(label);
+    const title = this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted));
+    // Big cover: the links are two icons at the end of the title line, so they take no row of their own.
+    const icons = h_flex().flex_none().gap(1)
+      .child(this.button("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id)), t, { size: 12, color: t.dim }))
+      .child(this.button("sp-open", "external", "Open in Spotify", () => this.openSpotify(), t, { size: 12, color: t.dim }));
     const text = v_flex().flex_1().min_w(0).gap(2)
-      .child(this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted)))
+      .when(big && Boolean(n.id), (el) => el.child(h_flex().gap(6).items_center().min_w(0).child(div().flex_1().min_w(0).child(title)).child(icons)))
+      .when(!big || !n.id, (el) => el.child(title))
       .child(this.scrolling("e-artist", n.artist ?? "", 16, (el) => el.text_size(12).text_color(t.muted)))
       .child(this.scrolling("e-album", album, 15, (el) => el.text_size(11).text_color(t.dim)))
-      .when(Boolean(n.id), (el) => el.child(h_flex().gap(2).mt(4).ml(-5).text_size(11)
+      .when(!big && Boolean(n.id), (el) => el.child(h_flex().gap(2).mt(4).ml(-5).text_size(11)
         .child(link("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id))))
         .child(link("sp-open", "external", "Open", () => this.openSpotify()))));
     const controls = h_flex().justify_center().items_center().gap(6)
@@ -272,10 +278,11 @@ export default class SpotifyMini extends View {
         .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(14)))
       .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t, { size: 14 }))
       .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat }));
-    const seek = v_flex().gap(1)
-      .child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t))
-      .child(h_flex().justify_between().text_size(10.5).text_color(t.dim)
-        .child(div().child(clock(at))).child(div().child(clock(n.duration))));
+    // The times sit on the slider's own line.
+    const seek = h_flex().gap(8).items_center().text_size(10.5).text_color(t.dim)
+      .child(div().flex_none().child(clock(at)))
+      .child(div().flex_1().min_w(0).child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t)))
+      .child(div().flex_none().child(clock(n.duration)));
     return root.gap(8)
       .child(h_flex().h(16).items_center()
         .child(div().flex_1().text_size(10.5).font_medium().text_color(t.dim).child("NOW PLAYING"))
