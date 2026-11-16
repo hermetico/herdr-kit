@@ -15,7 +15,9 @@ const BIG = "spotify-mini.big-cover";
 const PAD = 12;
 // Heights of the player's block: compact, expanded with the cover beside the text, and expanded with
 // the cover as wide as the block (its side, plus the rows under it).
-const HEIGHT = { compact: 66, expanded: 196, bigExtra: 170 };
+const HEIGHT = { compact: 66, expanded: 196, bigExtra: 170, rail: 50 };
+// Narrower than this, the sidebar is a rail: the player shows only play/pause and the time left.
+const RAIL_BELOW = 140;
 const FRONT_MS = 3000;
 const BACK_MS = 15000;
 const SEEK_STEPS = 1000;
@@ -109,11 +111,15 @@ export default class SpotifyMini extends View {
       this.shown = want;
       run(want ? "layout.show" : "layout.hide", { id: this.block });
     }
-    const px = !isExpanded() ? HEIGHT.compact : isBig() ? this.bigSide() + HEIGHT.bigExtra : HEIGHT.expanded;
+    const px = this.onRail() ? HEIGHT.rail : !isExpanded() ? HEIGHT.compact : isBig() ? this.bigSide() + HEIGHT.bigExtra : HEIGHT.expanded;
     if (want && px !== this.height) {
       this.height = px;
       run("layout.resize", { id: this.block, px });
     }
+  }
+
+  onRail() {
+    return this.width > 0 && this.width < RAIL_BELOW;
   }
 
   // The big cover's side: the block's width inside its padding.
@@ -248,7 +254,19 @@ export default class SpotifyMini extends View {
         cx.notify();
       });
     if (!this.now?.title) return root;
+    if (this.onRail()) return this.rail(root, t);
     return isExpanded() ? this.expanded(root, t) : this.compact(root, t);
+  }
+
+  // On a collapsed sidebar: play/pause and the time left, the song's name on hover.
+  rail(root, t) {
+    const n = this.now;
+    const playing = n.state === "playing";
+    const left = Math.max(0, n.duration - elapsed(n, (Date.now() - this.readAt) / 1000));
+    return root.px(0).py(8).gap(2).items_center().justify_center()
+      .child(this.key("sp-toggle", playing ? "▌▌" : "▶", `${playing ? "Pause" : "Play"}: ${n.title}${n.artist ? ` · ${n.artist}` : ""}`, (cx) => this.send("toggle", cx), t, { size: playing ? 9 : 14, color: t.foreground })
+        .w(24).h(18).px(0).py(0).flex().items_center().justify_center())
+      .child(div().text_size(9.5).text_color(playing ? t.muted : t.dim).child(`-${clock(left)}`));
   }
 
   compact(root, t) {

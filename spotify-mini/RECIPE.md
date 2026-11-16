@@ -23,6 +23,10 @@ a square `hover` highlight under the pointer). Compact or expanded, as kept in s
   (11px `dim`); then `[shuf]` at the left, `|◀ ▌▌ ▶|` centred and `[rpt]` at the right, the toggles
   `dim`, or `ansi2` while on; then a flat seek slider (a 2px line on `border`, filled in `ansi2`, or
   `dim` when paused, with a 3x10px `foreground` cursor) between the elapsed time and the length.
+- **On a collapsed sidebar**, when the block is narrower than 140px: 50px tall, play/pause in a
+  24x18px box with the time left under it (`-1:23`, 9.5px, `muted`, `dim` when paused); the key's
+  tooltip names the song. Compact, expanded and the
+  big cover come back when the sidebar is wider again.
 - **Big cover**, in expanded mode: an 18px square chip in the cover's bottom-right corner, on
   `chrome` at 80% opacity, grows the cover to the block's width inside its padding, with the text
   under it. The block grows to the cover's side plus 170px. The chip then shrinks it back. Kept in
@@ -59,7 +63,7 @@ a square `hover` highlight under the pointer). Compact or expanded, as kept in s
   plain id is accepted; `curl` saves it once as `~/.config/herdr-app/data/spotify-mini/art/<id>.jpg`,
   which `image()` draws.
 - The player's props name its own block (`"block"`): it runs `layout.hide` on that id when no track
-  is loaded, `layout.show` when one is, and `layout.resize` to 66px, 196px, or the big cover's side plus 170px. A hidden
+  is loaded, `layout.show` when one is, and `layout.resize` to 50px on a rail, 66px, 196px, or the big cover's side plus 170px. A hidden
   copy keeps running, so it can show again.
 - The buttons send `previous track`, `playpause` and `next track`, then read again at once.
 - The first time, macOS asks whether Herdr may control Spotify. Without that permission the block
