@@ -11,13 +11,18 @@ import { artUrl, clock, command, elapsed, panDue, panMs, parseState, progress, t
 const ICON = "mods/spotify-mini/icons";
 const ART_DIR = "data/spotify-mini/art";
 const EXPANDED = "spotify-mini.expanded";
-const HEIGHT = { compact: 66, expanded: 226 };
+const BIG = "spotify-mini.big-cover";
+const PAD = 12;
+// Heights of the player's block: compact, expanded with the cover beside the text, and expanded with
+// the cover as wide as the block (its side, plus the rows under it).
+const HEIGHT = { compact: 66, expanded: 226, bigExtra: 216 };
 const FRONT_MS = 3000;
 const BACK_MS = 15000;
 const SEEK_STEPS = 1000;
 
 const supported = () => window()?.platform === "macos";
 const isExpanded = () => shared(EXPANDED) === true;
+const isBig = () => shared(BIG) === true;
 
 export default class SpotifyMini extends View {
   init(_props, cx) {
@@ -28,6 +33,7 @@ export default class SpotifyMini extends View {
     this.art = {}; // cover id -> path for image(), or false while downloading or after a failure
     this.shown = null;
     this.height = null;
+    this.width = 0; // the block's width, for the big cover
     this.sizes = {}; // scrolling name -> { box, text } widths
     this.pans = {}; // scrolling name -> { phase: 0 or 1, at }
     this.dragging = false;
@@ -101,11 +107,24 @@ export default class SpotifyMini extends View {
       this.shown = want;
       run(want ? "layout.show" : "layout.hide", { id: this.block });
     }
-    const px = isExpanded() ? HEIGHT.expanded : HEIGHT.compact;
+    const px = !isExpanded() ? HEIGHT.compact : isBig() ? this.bigSide() + HEIGHT.bigExtra : HEIGHT.expanded;
     if (want && px !== this.height) {
       this.height = px;
       run("layout.resize", { id: this.block, px });
     }
+  }
+
+  // The big cover's side: the block's width inside its padding.
+  bigSide() {
+    return Math.max(120, Math.round((this.width || 268) - 2 * PAD));
+  }
+
+  toggleBig(cx) {
+    setShared(BIG, !isBig());
+    this.sizes = {};
+    this.pans = {};
+    this.fitBlock();
+    cx.notify();
   }
 
   toggleMode(cx) {
@@ -169,12 +188,20 @@ export default class SpotifyMini extends View {
         .child(text)));
   }
 
-  cover(t, px) {
+  // The cover. With `chip`, a small button in its top-right corner grows or shrinks it.
+  cover(t, px, chip = false) {
     const n = this.now;
     const path = n?.art && this.art[n.art];
-    return div().id(`sp-cover-${px}`).size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised)
+    const big = isBig();
+    return div().id(`sp-cover-${px}`).relative().size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised)
       .child(path ? image(path).size(px) : div().size_full().flex().items_center().justify_center()
-        .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)));
+        .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)))
+      .when(chip, (el) => el.child(div().id("sp-grow").absolute().top(4).right(4).size(18).rounded(4)
+        .flex().items_center().justify_center().cursor_pointer()
+        .bg(/^#[0-9a-f]{6}$/i.test(t.chrome) ? `${t.chrome}cc` : t.chrome).text_color(t.muted).hover((s) => s.bg(t.chrome).text_color(t.foreground))
+        .tooltip(big ? "Smaller cover" : "Bigger cover")
+        .on_click((_e, cx) => this.toggleBig(cx))
+        .child(svg(`${ICON}/${big ? "shrink" : "grow"}.svg`).size(11))));
   }
 
   slider(state, id, color, t) {
@@ -188,7 +215,14 @@ export default class SpotifyMini extends View {
   render() {
     if (this.mode === "bar") return this.bar(theme());
     const t = theme();
-    const root = v_flex().size_full().min_w(0).px(12).py(10).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden();
+    const root = v_flex().id("sp-root").size_full().min_w(0).px(PAD).py(10).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden()
+      .on_size_change((size, cx) => {
+        const w = Math.round(size.width);
+        if (w === this.width) return;
+        this.width = w;
+        this.fitBlock();
+        cx.notify();
+      });
     if (!this.now?.title) return root;
     return isExpanded() ? this.expanded(root, t) : this.compact(root, t);
   }
@@ -217,36 +251,40 @@ export default class SpotifyMini extends View {
     const n = this.now;
     const playing = n.state === "playing";
     const at = elapsed(n, (Date.now() - this.readAt) / 1000);
+    const big = isBig();
     const album = [n.album, n.track ? `track ${n.track}` : null].filter(Boolean).join(" · ");
     const link = (id, icon, label, onClick) => h_flex().id(id).gap(4).items_center().px(5).py(2).rounded(4).cursor_pointer()
       .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => onClick(cx))
       .child(svg(`${ICON}/${icon}.svg`).size(11)).child(label);
+    const text = v_flex().flex_1().min_w(0).gap(2)
+      .child(this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted)))
+      .child(this.scrolling("e-artist", n.artist ?? "", 16, (el) => el.text_size(12).text_color(t.muted)))
+      .child(this.scrolling("e-album", album, 15, (el) => el.text_size(11).text_color(t.dim)))
+      .when(Boolean(n.id), (el) => el.child(h_flex().gap(2).mt(4).ml(-5).text_size(11)
+        .child(link("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id))))
+        .child(link("sp-open", "external", "Open", () => this.openSpotify()))));
+    const controls = h_flex().justify_center().items_center().gap(6)
+      .child(this.button("sp-shuffle", "shuffle", n.shuffle ? "Shuffle is on" : "Shuffle", (cx) => this.send("shuffle", cx), t, { size: 13, lit: n.shuffle }))
+      .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t, { size: 14 }))
+      .child(div().id("sp-toggle").flex_none().size(30).rounded(15).flex().items_center().justify_center().cursor_pointer()
+        .bg(t.foreground).text_color(t.chrome).hover((s) => s.opacity(0.85)).tooltip(playing ? "Pause" : "Play")
+        .on_click((_e, cx) => this.send("toggle", cx))
+        .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(14)))
+      .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t, { size: 14 }))
+      .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat }));
+    const seek = v_flex().gap(1)
+      .child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t))
+      .child(h_flex().justify_between().text_size(10.5).text_color(t.dim)
+        .child(div().child(clock(at))).child(div().child(clock(n.duration))));
     return root.gap(8)
       .child(h_flex().h(16).items_center()
         .child(div().flex_1().text_size(10.5).font_medium().text_color(t.dim).child("NOW PLAYING"))
         .child(this.button("sp-collapse", "chevron-down", "Less", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim })))
-      .child(h_flex().gap(12).items_center().min_w(0)
-        .child(this.cover(t, 88))
-        .child(v_flex().flex_1().min_w(0).gap(2)
-          .child(this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted)))
-          .child(this.scrolling("e-artist", n.artist ?? "", 16, (el) => el.text_size(12).text_color(t.muted)))
-          .child(this.scrolling("e-album", album, 15, (el) => el.text_size(11).text_color(t.dim)))
-          .when(Boolean(n.id), (el) => el.child(h_flex().gap(2).mt(4).ml(-5).text_size(11)
-            .child(link("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id))))
-            .child(link("sp-open", "external", "Open", () => this.openSpotify()))))))
-      .child(v_flex().gap(1)
-        .child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t))
-        .child(h_flex().justify_between().text_size(10.5).text_color(t.dim)
-          .child(div().child(clock(at))).child(div().child(clock(n.duration)))))
-      .child(h_flex().justify_center().items_center().gap(6)
-        .child(this.button("sp-shuffle", "shuffle", n.shuffle ? "Shuffle is on" : "Shuffle", (cx) => this.send("shuffle", cx), t, { size: 13, lit: n.shuffle }))
-        .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t, { size: 14 }))
-        .child(div().id("sp-toggle").flex_none().size(30).rounded(15).flex().items_center().justify_center().cursor_pointer()
-          .bg(t.foreground).text_color(t.chrome).hover((s) => s.opacity(0.85)).tooltip(playing ? "Pause" : "Play")
-          .on_click((_e, cx) => this.send("toggle", cx))
-          .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(14)))
-        .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t, { size: 14 }))
-        .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat })));
+      // Big: the cover as wide as the block, the text under it. Otherwise side by side.
+      .when(big, (el) => el.child(this.cover(t, this.bigSide(), true)).child(text))
+      .when(!big, (el) => el.child(h_flex().gap(12).items_center().min_w(0).child(this.cover(t, 88, true)).child(text)))
+      .child(controls)
+      .child(seek);
   }
 
   bar(t) {

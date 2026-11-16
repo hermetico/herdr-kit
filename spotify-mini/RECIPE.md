@@ -9,16 +9,22 @@ another device through Spotify Connect, such as a phone, it shows and controls t
 ## What you see
 
 **The player**, a sidebar block on `chrome` with a 1px `border` line on top, 12px side and 10px
-vertical padding, in one of two modes kept in shared `spotify-mini.expanded`:
+vertical padding, compact or expanded as kept in shared `spotify-mini.expanded`:
 
 - **Compact**, 66px: the 44px cover, then the title at 12.5px semibold (`foreground`, `muted` when
   paused), the artist at 11.5px `dim` and `elapsed / length` at 10.5px `dim`. On the right, an Open
   icon and a chevron that expands it, both `dim`, above previous, play/pause and next.
 - **Expanded**, 226px: "NOW PLAYING" in 10.5px `dim` with a chevron that collapses it; the 88px cover
   beside the title (13.5px semibold), the artist (12px `muted`) and `album · track N` (11px `dim`),
-  with Copy link and Open under them; a seek slider (3px groove on `border`, fill in `ansi2`, `dim`
-  when paused, a 10px `foreground` knob centred on the groove with `ml(-5)` and `mt(-3.5)`) with the times under it; shuffle, previous, a 30px round
-  play/pause on `foreground`, next and repeat, the toggles in `ansi2` while on.
+  with Copy link and Open under them; then shuffle, previous, a 30px round play/pause on
+  `foreground`, next and repeat, the toggles in `ansi2` while on; then a seek slider (3px groove on
+  `border`, fill in `ansi2`, `dim` when paused, a 10px `foreground` knob centred on the groove with
+  `ml(-5)` and `mt(-3.5)`) with the times under it.
+- **Big cover**, in expanded mode: an 18px chip in the cover's top-right corner, on `chrome` at 80%
+  opacity, grows the cover to the block's width inside its padding, with the text and links under
+  it; the block grows to that side plus 216px. The chip then shrinks it back. Kept in shared
+  `spotify-mini.big-cover`; the block's width comes from `on_size_change`, so resizing the sidebar
+  resizes the cover.
 - Names too long for their box pan to their end at 30px/s, rest 2.5 s, pan back, rest, and so on.
   Short names stay still.
 - Only the Open button opens the track in the Spotify app; the cover and names don't react to
@@ -50,7 +56,7 @@ vertical padding, in one of two modes kept in shared `spotify-mini.expanded`:
   plain id is accepted; `curl` saves it once as `~/.config/herdr-app/data/spotify-mini/art/<id>.jpg`,
   which `image()` draws.
 - The player's props name its own block (`"block"`): it runs `layout.hide` on that id when no track
-  is loaded, `layout.show` when one is, and `layout.resize` to 66 or 226px for its mode. A hidden
+  is loaded, `layout.show` when one is, and `layout.resize` to 66px, 226px, or the big cover's side plus 216px. A hidden
   copy keeps running, so it can show again.
 - The buttons send `previous track`, `playpause` and `next track`, then read again at once.
 - The first time, macOS asks whether Herdr may control Spotify. Without that permission the block
