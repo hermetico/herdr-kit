@@ -8,15 +8,22 @@ another device through Spotify Connect, such as a phone, it shows and controls t
 
 ## What you see
 
-**The miniplayer**, a sidebar block 86px tall on `chrome` with a 1px `border` line on top, 12px side
-and 10px vertical padding:
+**The player**, a sidebar block on `chrome` with a 1px `border` line on top, 12px side and 10px
+vertical padding, in one of two modes kept in shared `spotify-mini.expanded`:
 
-- A row: the 44px cover with 6px corners (a `dim` note on `raised` until it's downloaded), the title
-  at 12.5px semibold (`foreground`, or `muted` when paused) over the artist at 11.5px `dim`, both
-  cut to fit, and the three buttons at 12px, play/pause 14px.
-- Under it, 10.5px `dim`: the elapsed time, a 3px bar on `border` filled in `ansi2` (`dim` when
-  paused), and the track's length.
-- Clicking the cover or the title brings the Spotify app to the front.
+- **Compact**, 66px: the 44px cover, then the title at 12.5px semibold (`foreground`, `muted` when
+  paused), the artist at 11.5px `dim` and `elapsed / length` at 10.5px `dim`, then previous,
+  play/pause and next, with a chevron under them that expands it.
+- **Expanded**, 252px: "NOW PLAYING" in 10.5px `dim` with a chevron that collapses it; the 88px cover
+  beside the title (13.5px semibold), the artist (12px `muted`) and `album · track N` (11px `dim`),
+  with Copy link and Open under them; a seek slider (3px groove on `border`, fill in `ansi2`, `dim`
+  when paused, a 10px `foreground` knob) with the times under it; shuffle, previous, a 30px round
+  play/pause on `foreground`, next and repeat, the toggles in `ansi2` while on; and a volume slider
+  with the percent.
+- Names too long for their box pan to their end at 30px/s, rest 2.5 s, pan back, rest, and so on.
+  Short names stay still.
+- Clicking the cover, or Open, opens the track in the Spotify app. Copy link copies its
+  `https://open.spotify.com/track/<id>` link.
 - The block hides itself while Spotify has nothing loaded, and shows again when it does.
 
 **The status-bar slot**:
@@ -31,15 +38,21 @@ and 10px vertical padding:
 ## How it behaves
 
 - One `osascript` run reads the state: it asks `application "Spotify" is running` first, so it never
-  launches Spotify, then returns the player state, title, artist, album, duration and position, one
-  per line. About 0.15 s.
+  launches Spotify, then returns the player state, title, artist, album, duration, position, cover
+  URL, track number, shuffle, repeat, volume and track id, one per line. About 0.15 s.
 - It reads every 3 s while the window is active and every 15 s otherwise. While a song plays the
-  miniplayer redraws every second, moving the progress bar from the last reading.
+  player redraws every second, moving the time and the seek slider from the last reading.
+- Commands are built by `command()` from a fixed list; volume and seek values are clamped whole
+  numbers, so nothing else reaches osascript. Sliders send their value once, on release.
+- Scrolling names: each one's box and text widths are measured with `on_size_change`. The pan is a
+  native `transition` on `left`; a once-a-second check flips its target when the last pan plus the
+  rest has passed, so nothing redraws per frame.
 - Covers: the reading includes the cover's `artwork url`. Only `https://i.scdn.co/image/<id>` with a
   plain id is accepted; `curl` saves it once as `~/.config/herdr-app/data/spotify-mini/art/<id>.jpg`,
   which `image()` draws.
-- The miniplayer's props name its own block (`"block"`): it runs `layout.hide` on that id when no
-  track is loaded and `layout.show` when one is. A hidden copy keeps running, so it can show again.
+- The player's props name its own block (`"block"`): it runs `layout.hide` on that id when no track
+  is loaded, `layout.show` when one is, and `layout.resize` to 66 or 252px for its mode. A hidden
+  copy keeps running, so it can show again.
 - The buttons send `previous track`, `playpause` and `next track`, then read again at once.
 - The first time, macOS asks whether Herdr may control Spotify. Without that permission the block
   stays empty.
@@ -49,11 +62,11 @@ and 10px vertical padding:
 - `mods/spotify-mini/`: `main.js`, `logic.mjs` (the AppleScript and the parser), `test_logic.mjs`,
   `mod.json` `{ "place": "none", "title": "Spotify mini" }`, and five icons in `icons/`.
 - The miniplayer, in the sidebar column above its footer:
-  `{ "id": "spotify-player", "type": "block", "size": { "px": 86 }, "content": { "mod": "spotify-mini", "props": { "mode": "player", "block": "spotify-player" } } }`.
+  `{ "id": "spotify-player", "type": "block", "size": { "px": 66 }, "content": { "mod": "spotify-mini", "props": { "mode": "player", "block": "spotify-player" } } }`.
 - Or the slot, in the status row:
   `{ "id": "spotify-mini", "type": "block", "size": { "px": 320 }, "content": { "mod": "spotify-mini" } }`.
-- `herdr`: `exec`, `run` (`layout.show`, `layout.hide`), `appHome`, `props`, `theme`, `window`,
-  `checking`. Programs: `osascript`, `curl`, `open`.
+- `herdr`: `exec`, `run` (`layout.show`, `layout.hide`, `layout.resize`), `appHome`, `props`,
+  `shared`, `setShared`, `theme`, `window`, `checking`. `gpui-base`: `Slider` and its parts. Programs: `osascript`, `curl`, `open`.
 
 ## Watch out
 

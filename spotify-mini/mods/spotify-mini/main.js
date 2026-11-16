@@ -1,20 +1,23 @@
-// Spotify mini: what the Spotify app on this Mac is playing, with previous, play/pause and next.
-// It talks to the app through AppleScript, so a phone or another device that the app follows through
-// Spotify Connect shows and obeys too. No sign-in.
+// Spotify mini: what the Spotify app on this Mac is playing, with its controls. It talks to the app
+// through AppleScript, so a phone or another device that the app follows through Spotify Connect
+// shows and obeys too. No sign-in.
 // Two shapes by props: a status-bar slot (default), or { "mode": "player", "block": "<its block id>" },
-// a miniplayer with the cover and a progress bar that hides its own block while nothing plays.
+// a sidebar player that is compact or expanded, and hides its own block while nothing is loaded.
 import { View, div, image, svg } from "gpui-kit";
-import { h_flex, v_flex } from "gpui-base";
-import { appHome, checking, exec, props, run, theme, window } from "herdr";
-import { COMMAND, READ_SCRIPT, artUrl, clock, parseState, progress } from "./logic.mjs";
+import { Slider, SliderIndicator, SliderState, SliderThumb, SliderTrack, h_flex, v_flex } from "gpui-base";
+import { appHome, checking, exec, props, run, setShared, shared, theme, window } from "herdr";
+import { artUrl, clock, command, elapsed, panDue, panMs, parseState, progress, trackLink, trackUri, READ_SCRIPT } from "./logic.mjs";
 
 const ICON = "mods/spotify-mini/icons";
 const ART_DIR = "data/spotify-mini/art";
+const EXPANDED = "spotify-mini.expanded";
+const HEIGHT = { compact: 66, expanded: 252 };
 const FRONT_MS = 3000;
 const BACK_MS = 15000;
-const ART_PX = 44;
+const SEEK_STEPS = 1000;
 
 const supported = () => window()?.platform === "macos";
+const isExpanded = () => shared(EXPANDED) === true;
 
 export default class SpotifyMini extends View {
   init(_props, cx) {
@@ -24,14 +27,31 @@ export default class SpotifyMini extends View {
     this.readAt = 0;
     this.art = {}; // cover id -> path for image(), or false while downloading or after a failure
     this.shown = null;
+    this.height = null;
+    this.sizes = {}; // scrolling name -> { box, text } widths
+    this.pans = {}; // scrolling name -> { phase: 0 or 1, at }
+    this.dragging = { seek: false, volume: false };
     if (checking() || !supported()) return;
+    if (this.mode === "player") this.sliders();
     this.read(cx);
     // Every 3 s while Herdr is in front, every 15 s behind other windows.
     cx.timer.every(FRONT_MS, (cx) => {
       if (window()?.active || Date.now() - this.readAt >= BACK_MS) this.read(cx);
     });
-    // The player's progress bar moves every second while a song plays.
-    if (this.mode === "player") cx.timer.every(1000, (cx) => { if (this.now?.state === "playing" && this.shown) cx.notify(); });
+    // Once a second: move the progress, and flip any scrolling name that has rested long enough.
+    if (this.mode === "player") cx.timer.every(1000, (cx) => this.tick(cx));
+  }
+
+  sliders() {
+    this.seek = SliderState.new({ min: 0, max: SEEK_STEPS, step: 1, value: 0 });
+    this.seek.on("change", () => { this.dragging.seek = true; });
+    this.seek.on("release", (v, cx) => {
+      this.dragging.seek = false;
+      if (this.now?.duration) this.send("seek", cx, (Number(v) / SEEK_STEPS) * this.now.duration);
+    });
+    this.volume = SliderState.new({ min: 0, max: 100, step: 1, value: 0 });
+    this.volume.on("change", () => { this.dragging.volume = true; });
+    this.volume.on("release", (v, cx) => { this.dragging.volume = false; this.send("volume", cx, Number(v)); });
   }
 
   read(cx) {
@@ -40,10 +60,13 @@ export default class SpotifyMini extends View {
     cx.spawn(async (cx) => {
       try {
         const r = await exec("osascript", ["-e", READ_SCRIPT]).catch(() => null);
-        this.now = r && r.code === 0 ? parseState(r.stdout) : null;
+        const next = r && r.code === 0 ? parseState(r.stdout) : null;
+        if (next?.id !== this.now?.id || next?.title !== this.now?.title) this.pans = {};
+        this.now = next;
         this.readAt = Date.now();
         if (this.mode === "player") {
           this.fitBlock();
+          this.syncSliders();
           if (this.now?.art) await this.fetchArt(this.now.art);
         }
       } finally {
@@ -53,13 +76,48 @@ export default class SpotifyMini extends View {
     });
   }
 
-  // The player's block shows only while a track is loaded. A hidden copy keeps running, so it can
-  // show the block again.
+  tick(cx) {
+    if (!this.shown) return;
+    const now = Date.now();
+    let flipped = false;
+    for (const [key, size] of Object.entries(this.sizes)) {
+      const over = Math.max(0, size.text - size.box);
+      const pan = this.pans[key] ?? (this.pans[key] = { phase: 0, at: now });
+      if (panDue(over, now - pan.at)) { pan.phase = 1 - pan.phase; pan.at = now; flipped = true; }
+    }
+    if (this.now?.state === "playing") this.syncSliders();
+    if (flipped || this.now?.state === "playing") cx.notify();
+  }
+
+  // The sliders follow the player unless the person is dragging them.
+  syncSliders() {
+    if (!this.seek || !this.now?.title) return;
+    if (!this.dragging.seek) this.seek.set_value(Math.round(progress(this.now, (Date.now() - this.readAt) / 1000) * SEEK_STEPS));
+    if (!this.dragging.volume && this.now.volume !== null) this.volume.set_value(this.now.volume);
+  }
+
+  // The player's block shows only while a track is loaded, at the height of its mode. A hidden copy
+  // keeps running, so it can show the block again.
   fitBlock() {
+    if (!this.block) return;
     const want = Boolean(this.now?.title);
-    if (!this.block || want === this.shown) return;
-    this.shown = want;
-    run(want ? "layout.show" : "layout.hide", { id: this.block });
+    if (want !== this.shown) {
+      this.shown = want;
+      run(want ? "layout.show" : "layout.hide", { id: this.block });
+    }
+    const px = isExpanded() ? HEIGHT.expanded : HEIGHT.compact;
+    if (want && px !== this.height) {
+      this.height = px;
+      run("layout.resize", { id: this.block, px });
+    }
+  }
+
+  toggleMode(cx) {
+    setShared(EXPANDED, !isExpanded());
+    this.sizes = {};
+    this.pans = {};
+    this.fitBlock();
+    cx.notify();
   }
 
   // image() draws local files only: each cover is saved once under the app's data folder.
@@ -71,30 +129,131 @@ export default class SpotifyMini extends View {
     if (r?.code === 0) this.art[id] = relative;
   }
 
-  send(name, cx) {
+  send(name, cx, value) {
+    const line = command(name, value);
+    if (!line) return;
     cx.spawn(async (cx) => {
-      await exec("osascript", ["-e", COMMAND[name]]).catch(() => null);
+      await exec("osascript", ["-e", line]).catch(() => null);
       this.read(cx);
     });
   }
 
-  button(id, icon, tip, name, t, size = 11) {
-    return div().id(id).flex_none().p(3).rounded(4).cursor_pointer().text_color(t.muted)
-      .hover((s) => s.bg(t.hover).text_color(t.foreground)).tooltip(tip)
-      .on_click((_e, cx) => this.send(name, cx))
+  openSpotify() {
+    const id = this.now?.id;
+    exec("open", id ? [trackUri(id)] : ["-a", "Spotify"]).catch(() => {});
+  }
+
+  // ---- drawing ----
+
+  button(id, icon, tip, onClick, t, { size = 11, color = t.muted, lit = false } = {}) {
+    return div().id(id).flex_none().p(3).rounded(4).cursor_pointer().text_color(lit ? t.ansi2 : color)
+      .hover((s) => s.bg(t.hover).text_color(lit ? t.ansi2 : t.foreground)).tooltip(tip)
+      .on_click((_e, cx) => onClick(cx))
       .child(svg(`${ICON}/${icon}.svg`).size(size));
   }
 
-  controls(t, size) {
-    const playing = this.now?.state === "playing";
-    return h_flex().flex_none().gap(1).items_center()
-      .child(this.button("sp-prev", "previous", "Previous", "previous", t, size))
-      .child(this.button("sp-toggle", playing ? "pause" : "play", playing ? "Pause" : "Play", "toggle", t, size + 2))
-      .child(this.button("sp-next", "next", "Next", "next", t, size));
+  // A name in one line. Too long for its box, it pans to its end, rests, and pans back.
+  scrolling(key, text, h, style) {
+    const size = this.sizes[key];
+    const over = size ? Math.max(0, size.text - size.box) : 0;
+    const phase = this.pans[key]?.phase ?? 0;
+    const measure = (field) => (s, cx) => {
+      const w = Math.ceil(s.width);
+      const old = this.sizes[key] ?? { box: 0, text: 0 };
+      if (old[field] === w) return;
+      this.sizes[key] = { ...old, [field]: w };
+      cx.notify();
+    };
+    return div().id(`sc-${key}`).relative().overflow_hidden().w_full().h(h).flex_none()
+      .on_size_change(measure("box"))
+      .child(style(div().id(`sc-${key}-t`).absolute().top(0).whitespace_nowrap()
+        .left(over && phase ? -over : 0)
+        .transition("left", { duration: panMs(over), easing: "ease-in-out" })
+        .on_size_change(measure("text"))
+        .child(text)));
+  }
+
+  cover(t, px) {
+    const n = this.now;
+    const path = n?.art && this.art[n.art];
+    return div().id(`sp-cover-${px}`).size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised).cursor_pointer()
+      .tooltip("Open in Spotify").on_click(() => this.openSpotify())
+      .child(path ? image(path).size(px) : div().size_full().flex().items_center().justify_center()
+        .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)));
+  }
+
+  slider(state, id, color, t) {
+    return Slider.new(state).w_full().child(
+      SliderTrack.new(state).flex().items_center().h(14).w_full().cursor_pointer().child(
+        SliderIndicator.new(state).relative().w_full().h(3).rounded(2).bg(t.border)
+          .range_style((fill) => fill.rounded(2).bg(color))
+          .child(SliderThumb.new(state).id(`${id}-thumb`).size(10).rounded(5).bg(t.foreground).ml(-5))));
   }
 
   render() {
-    return this.mode === "player" ? this.player(theme()) : this.bar(theme());
+    if (this.mode === "bar") return this.bar(theme());
+    const t = theme();
+    const root = v_flex().size_full().min_w(0).px(12).py(10).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden();
+    if (!this.now?.title) return root;
+    return isExpanded() ? this.expanded(root, t) : this.compact(root, t);
+  }
+
+  compact(root, t) {
+    const n = this.now;
+    const playing = n.state === "playing";
+    const at = elapsed(n, (Date.now() - this.readAt) / 1000);
+    return root.child(h_flex().gap(10).items_center().min_w(0)
+      .child(this.cover(t, 44))
+      .child(v_flex().flex_1().min_w(0).gap(1)
+        .child(this.scrolling("c-title", n.title, 17, (el) => el.text_size(12.5).font_semibold().text_color(playing ? t.foreground : t.muted)))
+        .child(this.scrolling("c-artist", n.artist ?? "", 15, (el) => el.text_size(11.5).text_color(t.dim)))
+        .child(div().text_size(10.5).text_color(t.dim).child(`${clock(at)} / ${clock(n.duration)}`)))
+      .child(v_flex().flex_none().items_end().gap(2)
+        .child(h_flex().gap(1)
+          .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t))
+          .child(this.button("sp-toggle", playing ? "pause" : "play", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: 13 }))
+          .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t)))
+        .child(this.button("sp-expand", "chevron-up", "More", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim }))));
+  }
+
+  expanded(root, t) {
+    const n = this.now;
+    const playing = n.state === "playing";
+    const at = elapsed(n, (Date.now() - this.readAt) / 1000);
+    const album = [n.album, n.track ? `track ${n.track}` : null].filter(Boolean).join(" · ");
+    const link = (id, icon, label, onClick) => h_flex().id(id).gap(4).items_center().px(5).py(2).rounded(4).cursor_pointer()
+      .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => onClick(cx))
+      .child(svg(`${ICON}/${icon}.svg`).size(11)).child(label);
+    return root.gap(8)
+      .child(h_flex().h(16).items_center()
+        .child(div().flex_1().text_size(10.5).font_medium().text_color(t.dim).child("NOW PLAYING"))
+        .child(this.button("sp-collapse", "chevron-down", "Less", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim })))
+      .child(h_flex().gap(12).items_center().min_w(0)
+        .child(this.cover(t, 88))
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted)))
+          .child(this.scrolling("e-artist", n.artist ?? "", 16, (el) => el.text_size(12).text_color(t.muted)))
+          .child(this.scrolling("e-album", album, 15, (el) => el.text_size(11).text_color(t.dim)))
+          .when(Boolean(n.id), (el) => el.child(h_flex().gap(2).mt(4).ml(-5).text_size(11)
+            .child(link("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id))))
+            .child(link("sp-open", "external", "Open", () => this.openSpotify()))))))
+      .child(v_flex().gap(1)
+        .child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t))
+        .child(h_flex().justify_between().text_size(10.5).text_color(t.dim)
+          .child(div().child(clock(at))).child(div().child(clock(n.duration)))))
+      .child(h_flex().justify_center().items_center().gap(6)
+        .child(this.button("sp-shuffle", "shuffle", n.shuffle ? "Shuffle is on" : "Shuffle", (cx) => this.send("shuffle", cx), t, { size: 13, lit: n.shuffle }))
+        .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t, { size: 14 }))
+        .child(div().id("sp-toggle").flex_none().size(30).rounded(15).flex().items_center().justify_center().cursor_pointer()
+          .bg(t.foreground).text_color(t.chrome).hover((s) => s.opacity(0.85)).tooltip(playing ? "Pause" : "Play")
+          .on_click((_e, cx) => this.send("toggle", cx))
+          .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(14)))
+        .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t, { size: 14 }))
+        .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat })))
+      .when(n.volume !== null, (el) => el.child(h_flex().gap(8).items_center()
+        .child(svg(`${ICON}/volume.svg`).size(13).flex_none().text_color(t.dim))
+        .child(div().flex_1().child(this.slider(this.volume, "sp-volume", t.muted, t)))
+        .child(div().w(30).flex_none().text_size(10.5).text_color(t.dim).child(`${n.volume}%`))));
   }
 
   bar(t) {
@@ -111,33 +270,9 @@ export default class SpotifyMini extends View {
         .child(h_flex().gap(4).min_w(0)
           .child(div().min_w(0).truncate().text_color(playing ? t.foreground : t.dim).child(n.title))
           .when(Boolean(n.artist), (el) => el.child(div().flex_none().text_color(t.dim).child("·")).child(div().min_w(0).truncate().text_color(t.dim).child(n.artist)))))
-      .child(this.controls(t, 11).ml(2));
-  }
-
-  player(t) {
-    const root = v_flex().size_full().min_w(0).px(12).py(10).gap(8).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden();
-    const n = this.now;
-    if (!n || !n.title) return root;
-    const playing = n.state === "playing";
-    const since = playing ? (Date.now() - this.readAt) / 1000 : 0;
-    const share = progress(n, since);
-    const at = Math.min(n.duration, n.position + since);
-    const cover = n.art && this.art[n.art];
-    const open = () => exec("open", ["-a", "Spotify"]).catch(() => {});
-    return root
-      .child(h_flex().gap(10).items_center().min_w(0)
-        .child(div().id("sp-cover").size(ART_PX).flex_none().rounded(6).overflow_hidden().bg(t.raised).cursor_pointer()
-          .tooltip(n.album ? `${n.album}: open Spotify` : "Open Spotify").on_click(() => open())
-          .child(cover ? image(cover).size(ART_PX) : div().size_full().flex().items_center().justify_center()
-            .child(svg(`${ICON}/note.svg`).size(16).text_color(t.dim))))
-        .child(v_flex().id("sp-text").flex_1().min_w(0).gap(1).cursor_pointer().on_click(() => open())
-          .child(div().truncate().text_size(12.5).font_semibold().text_color(playing ? t.foreground : t.muted).child(n.title))
-          .child(div().truncate().text_size(11.5).text_color(t.dim).child(n.artist ?? "")))
-        .child(this.controls(t, 12)))
-      .child(h_flex().gap(8).items_center().text_size(10.5).text_color(t.dim)
-        .child(div().flex_none().child(clock(at)))
-        .child(div().flex_1().h(3).rounded(2).bg(t.border).overflow_hidden()
-          .child(div().h_full().rounded(2).bg(playing ? t.ansi2 : t.dim).w(`${(share * 100).toFixed(2)}%`)))
-        .child(div().flex_none().child(clock(n.duration))));
+      .child(h_flex().flex_none().gap(1).ml(2)
+        .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t))
+        .child(this.button("sp-toggle", playing ? "pause" : "play", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t))
+        .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t)));
   }
 }
