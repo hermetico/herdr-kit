@@ -179,13 +179,15 @@ export default class SpotifyMini extends View {
       .child(label);
   }
 
-  // ▌▌ fills the whole line while ▶ fills about two thirds of it: the triangle is drawn larger so
-  // play and pause look the same height.
+  // ▌▌ fills the whole line while ▶ fills only part of it: the triangle is drawn larger so play and
+  // pause look the same height.
   transportKeys(t, size) {
     const playing = this.now?.state === "playing";
     return h_flex().flex_none().items_center().gap(2)
       .child(this.key("sp-prev", "|◀", "Previous", (cx) => this.send("previous", cx), t, { size }))
-      .child(this.key("sp-toggle", playing ? "▌▌" : "▶", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: playing ? size - 2 : size + 3, color: t.foreground }))
+      // A fixed box, the glyph centred in it, so swapping play and pause moves nothing around it.
+      .child(this.key("sp-toggle", playing ? "▌▌" : "▶", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: playing ? size - 2 : size + 5, color: t.foreground })
+        .w(size + 12).h(size + 8).px(0).py(0).flex().items_center().justify_center())
       .child(this.key("sp-next", "▶|", "Next", (cx) => this.send("next", cx), t, { size }));
   }
 
