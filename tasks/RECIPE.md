@@ -14,7 +14,7 @@ launch configurations run without a debugger.
     Nothing at all when there are no items and nothing runs.
   - One chip per running item, on `raised`, at most 260px: a 6px `working` dot, the name in
     `foreground`, a restart icon in `ansi2` and a stop icon in `ansi1`.
-- **The list**, a 340px popup at the pointer, up to 560px tall, on `popover`:
+- **The list**, a 340px popup at the pointer, up to 560px tall, on `popover`. Its root has that exact height: a popup sizes to its content, and a `size_full` root collapses to the header.
   - A 40px header: "Run" semibold, then the source as a chip on `raised`. With several source
     files the chip reads `label  1/2` and a click switches to the next one.
   - **Launch** and **Tasks** sections with 11px `dim` titles. Rows are 28px: a 6px dot in

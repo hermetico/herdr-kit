@@ -13,6 +13,9 @@ const RUNNING = "tasks.running"; // key -> { tab, space, name, ws }
 const PENDING = "tasks.pending"; // [{ key, name, ws, before: [tab ids], at }]
 const PICKS = "tasks.picks"; // machine|root -> the source file picked
 const ROW_H = 28;
+const HEAD_H = 40;
+// A popup is sized by its content: the root needs an exact height, the same one the popup opens with.
+const listHeight = (n) => Math.min(560, HEAD_H + 56 + ROW_H * (n + 2));
 
 const allTabs = () => spaces().flatMap((s) => s.tabs.map((t) => ({ ...t, space: s.id })));
 
@@ -191,7 +194,7 @@ export default class Tasks extends View {
       .when(list.length > 0, (el) => el.child(chip().id("tasks-open").max_w(220).cursor_pointer()
         .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
         .tooltip(`${list.length} tasks and configurations in ${this.chosen()?.label ?? ""}`)
-        .on_click(() => openOverlay({ mod: "tasks", kind: "popup", width: 340, height: Math.min(560, 96 + ROW_H * (list.length + 2)), props: { role: "list" } }))
+        .on_click(() => openOverlay({ mod: "tasks", kind: "popup", width: 340, height: listHeight(list.length), props: { role: "list" } }))
         .child(svg(`${ICON}/play.svg`).size(11).flex_none().text_color(t.ansi2))
         .child(div().flex_none().child("Run"))
         .child(div().min_w(0).truncate().text_color(t.dim).child(baseName(this.src.ws)))))
@@ -230,8 +233,9 @@ export default class Tasks extends View {
     const section = (label) => div().px(8).pt(8).pb(2).flex_none().text_size(11).font_medium().text_color(t.dim).child(label);
     const s = this.chosen();
     let n = 0;
-    return v_flex().size_full().min_h(0).bg(t.popover).text_size(13)
-      .child(h_flex().px(14).h(40).flex_none().gap(8).items_center().border_b(1).border_color(t.border)
+    const height = listHeight(all.length);
+    return v_flex().w_full().h(height).bg(t.popover).text_size(13)
+      .child(h_flex().px(14).h(HEAD_H).flex_none().gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().flex_none().font_semibold().text_color(t.foreground).child("Run"))
         .when(Boolean(s), (el) => el.child(div().id("source").min_w(0).truncate().px(6).py(1).rounded(4).text_size(11)
           .bg(t.raised).text_color(many ? t.foreground : t.dim)
@@ -241,7 +245,7 @@ export default class Tasks extends View {
         .child(div().flex_1())
         .child(div().id("close").flex_none().text_size(11).text_color(t.dim).cursor_pointer()
           .on_click(() => this.overlay && closeOverlay(this.overlay)).child("Esc")))
-      .child(v_flex().id("rows").flex_1().min_h(0).px(6).pb(8).overflow_y_scrollbar()
+      .child(v_flex().id("rows").w_full().h(height - HEAD_H).px(6).pb(8).overflow_y_scrollbar()
         .when(Boolean(this.error), (el) => el.child(div().px(8).pt(8).text_size(12).text_color(t.blocked).child(this.error)))
         .when(!all.length && !this.error, (el) => el.child(div().px(8).pt(10).text_size(12).text_color(t.dim)
           .child("No tasks.json, launch.json or .code-workspace here or in the folders above.")))
