@@ -6,7 +6,7 @@ Small mods for the [Herdr](https://herdr.dev) desktop app.
 |---|---|
 | [tasks](tasks/RECIPE.md) | Runs VS Code tasks and launch configurations from the status bar, `.code-workspace` files included. A chip per running task restarts or stops it. |
 | [keep-awake](keep-awake/RECIPE.md) | A cup in the status bar that keeps your Mac's display awake while it's on. |
-| [spotify-mini](spotify-mini/RECIPE.md) | What Spotify is playing, with previous, play/pause and next, in the status bar. Talks to the Mac app: no sign-in. |
+| [spotify-mini](spotify-mini/RECIPE.md) | A Spotify miniplayer for the sidebar, with cover, progress and controls, or a compact status-bar slot. Talks to the Mac app: no sign-in. |
 
 ## Install
 
