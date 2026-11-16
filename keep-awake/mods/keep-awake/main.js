@@ -30,7 +30,8 @@ export default class KeepAwake extends View {
 
   render() {
     const t = theme();
-    const root = div().size_full().flex().items_center().justify_center();
+    // Drawn like the other status-bar blocks: chrome, a top border, and a divider on its left.
+    const root = div().size_full().flex().items_center().justify_center().bg(t.chrome).border_t(1).border_l(1).border_color(t.border);
     if (!supported()) return root;
     const on = isOn();
     return root.child(div().id("keep-awake").p(4).rounded(5).cursor_pointer()

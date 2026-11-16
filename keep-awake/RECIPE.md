@@ -6,7 +6,8 @@ half a minute.
 
 ## What you see
 
-- An 18px cup icon, centered in a 36px status-bar block, in a 4px padded button with 5px corners.
+- An 18px cup icon, centered in a 36px status-bar block on `chrome` with a 1px `border` line on top
+  and on its left, in a 4px padded button with 5px corners. It sits at the right end of the status row.
 - Off: the cup in `dim`, `foreground` on hover. Tooltip "Keep the display awake".
 - On: a filled cup, `cup-on.svg`, in `accent` on `raised`. Tooltip "Keeping the display awake. Click to let it sleep."
 - On Linux and Windows the block stays empty.
