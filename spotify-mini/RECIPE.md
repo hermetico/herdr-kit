@@ -9,26 +9,25 @@ another device through Spotify Connect, such as a phone, it shows and controls t
 ## What you see
 
 **The player**, a sidebar block on `chrome` with a 1px `border` line on top, 12px side and 10px
-vertical padding, compact or expanded as kept in shared `spotify-mini.expanded`:
+vertical padding, drawn like a TUI: all its text in the terminal font (`settings().font`, else
+JetBrains Mono), square corners, and controls as text keys (a glyph or a bracketed word, `px(4)`,
+a square `hover` highlight under the pointer). Compact or expanded, as kept in shared
+`spotify-mini.expanded`:
 
-- **Compact**, 66px: the 44px cover, then the title at 12.5px semibold (`foreground`, `muted` when
-  paused), the artist at 11.5px `dim` and `elapsed / length` at 10.5px `dim`. On the right, an Open
-  icon and a chevron that expands it, both `dim`, above the transport: previous and next in 20px
-  round hit areas, and play/pause in a 22px circle on `raised`.
-- **Expanded**, 196px: "NOW PLAYING" in 10.5px `dim` with a chevron that collapses it; the 88px cover
-  beside the title (13.5px semibold) with Copy link and Open as two 12px `dim` icons at the end of
-  its line, the artist (12px `muted`) and `album · track N` (11px `dim`); then the controls; then a
-  seek slider (3px groove on `border`, fill in `ansi2`, `dim` when paused, a 10px `foreground` knob
-  centred on the groove with `ml(-5)` and `mt(-3.5)`) between the elapsed time and the length.
-- **The controls**, centred, 10px apart: shuffle, previous, play/pause, next, repeat. Previous and
-  next sit in 28px round hit areas in `muted`; play/pause is a 32px circle on `raised` with a
-  `foreground` icon, `hover` under the pointer. Shuffle and repeat are 12px `dim` icons; while on
-  they turn `ansi2` with a 3px dot under them.
-- **Big cover**, in expanded mode: an 18px chip in the cover's bottom-right corner, on `chrome` at
-  80% opacity, grows the cover to the block's width inside its padding, with the text under it.
-  The block grows to the cover's side plus 170px. The chip then shrinks it back. Kept in shared
-  `spotify-mini.big-cover`; the block's width comes from `on_size_change`, so resizing the sidebar
-  resizes the cover.
+- **Compact**, 66px: the 44px cover, square with a 1px `border`, then the title at 12.5px semibold
+  (`foreground`, `muted` when paused), the artist at 11.5px `dim` and `elapsed / length` at 10.5px
+  `dim`. On the right, `↗` (open) and `▴` (expand) in `dim`, above `|◀ ▶ ▶|` (`‖` while playing).
+- **Expanded**, 196px: a rule line, `─ now playing` in 10.5px `dim`, a 1px `border` line filling the
+  rest, and `▾` to collapse; the 88px cover beside the title (13.5px semibold) with `[cp]` (copy
+  link) and `[↗]` (open) at the end of its line, the artist (12px `muted`) and `album · track N`
+  (11px `dim`); then `[shuf]` at the left, `|◀ ‖ ▶|` centred and `[rpt]` at the right, the toggles
+  `dim`, or `ansi2` while on; then a flat seek slider (a 2px line on `border`, filled in `ansi2`, or
+  `dim` when paused, with a 3x10px `foreground` cursor) between the elapsed time and the length.
+- **Big cover**, in expanded mode: an 18px square chip in the cover's bottom-right corner, on
+  `chrome` at 80% opacity, grows the cover to the block's width inside its padding, with the text
+  under it. The block grows to the cover's side plus 170px. The chip then shrinks it back. Kept in
+  shared `spotify-mini.big-cover`; the block's width comes from `on_size_change`, so resizing the
+  sidebar resizes the cover.
 - Names too long for their box pan to their end at 30px/s, rest 2.5 s, pan back, rest, and so on.
   Short names stay still.
 - Only the Open button opens the track in the Spotify app; the cover and names don't react to

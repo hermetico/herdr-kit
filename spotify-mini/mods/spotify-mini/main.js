@@ -5,7 +5,7 @@
 // a sidebar player that is compact or expanded, and hides its own block while nothing is loaded.
 import { View, div, image, svg } from "gpui-kit";
 import { Slider, SliderIndicator, SliderState, SliderThumb, SliderTrack, h_flex, v_flex } from "gpui-base";
-import { appHome, checking, exec, props, run, setShared, shared, theme, window } from "herdr";
+import { appHome, checking, exec, props, run, settings, setShared, shared, theme, window } from "herdr";
 import { artUrl, clock, command, elapsed, panDue, panMs, parseState, progress, trackLink, trackUri, READ_SCRIPT } from "./logic.mjs";
 
 const ICON = "mods/spotify-mini/icons";
@@ -21,6 +21,8 @@ const BACK_MS = 15000;
 const SEEK_STEPS = 1000;
 
 const supported = () => window()?.platform === "macos";
+// The player draws in the terminal font, like a TUI. Herdr's default when settings name none.
+const mono = () => String(settings()?.font || "JetBrains Mono");
 const isExpanded = () => shared(EXPANDED) === true;
 const isBig = () => shared(BIG) === true;
 
@@ -167,30 +169,22 @@ export default class SpotifyMini extends View {
       .child(svg(`${ICON}/${icon}.svg`).size(size));
   }
 
-  // Transport buttons share one square hit area, so their spacing is even whatever the icon.
-  transport(id, icon, tip, onClick, t, box, size) {
-    return div().id(id).flex_none().size(box).rounded(box / 2).flex().items_center().justify_center().cursor_pointer()
-      .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground)).tooltip(tip)
+  // A control as a text key, TUI style: a glyph or a bracketed word in the terminal font, with a
+  // square highlight under the pointer. `lit` draws it in `ansi2`, for a toggle that is on.
+  key(id, label, tip, onClick, t, { size = 12, color = t.muted, lit = false, bold = false } = {}) {
+    return div().id(id).flex_none().px(4).py(1).font_family(mono()).text_size(size).cursor_pointer()
+      .when(bold, (el) => el.font_semibold())
+      .text_color(lit ? t.ansi2 : color).hover((s) => s.bg(t.hover).text_color(lit ? t.ansi2 : t.foreground)).tooltip(tip)
       .on_click((_e, cx) => onClick(cx))
-      .child(svg(`${ICON}/${icon}.svg`).size(size));
+      .child(label);
   }
 
-  // Play/pause: a round button on `raised`, the one control that stands out, without shouting.
-  playButton(t, box, size) {
+  transportKeys(t, size) {
     const playing = this.now?.state === "playing";
-    return div().id("sp-toggle").flex_none().size(box).rounded(box / 2).flex().items_center().justify_center().cursor_pointer()
-      .bg(t.raised).text_color(t.foreground).hover((s) => s.bg(t.hover)).tooltip(playing ? "Pause" : "Play")
-      .on_click((_e, cx) => this.send("toggle", cx))
-      .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(size));
-  }
-
-  // Shuffle and repeat: `dim`, or `ansi2` with a small dot under the icon while on.
-  toggle(id, icon, label, on, name, t) {
-    return v_flex().id(id).flex_none().size(24).rounded(12).items_center().justify_center().gap(1).cursor_pointer()
-      .text_color(on ? t.ansi2 : t.dim).hover((s) => s.bg(t.hover).text_color(on ? t.ansi2 : t.foreground))
-      .tooltip(on ? `${label} is on` : label).on_click((_e, cx) => this.send(name, cx))
-      .child(svg(`${ICON}/${icon}.svg`).size(12))
-      .child(div().size(3).rounded(2).bg(on ? t.ansi2 : "#00000000"));
+    return h_flex().flex_none().items_center().gap(2)
+      .child(this.key("sp-prev", "|◀", "Previous", (cx) => this.send("previous", cx), t, { size }))
+      .child(this.key("sp-toggle", playing ? "‖" : "▶", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: size + 1, color: t.foreground, bold: true }))
+      .child(this.key("sp-next", "▶|", "Next", (cx) => this.send("next", cx), t, { size }));
   }
 
   // A name in one line. Too long for its box, it pans to its end, rests, and pans back.
@@ -219,10 +213,10 @@ export default class SpotifyMini extends View {
     const n = this.now;
     const path = n?.art && this.art[n.art];
     const big = isBig();
-    return div().id(`sp-cover-${px}`).relative().size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised)
+    return div().id(`sp-cover-${px}`).relative().size(px).flex_none().overflow_hidden().bg(t.raised).border(1).border_color(t.border)
       .child(path ? image(path).size(px) : div().size_full().flex().items_center().justify_center()
         .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)))
-      .when(chip, (el) => el.child(div().id("sp-grow").absolute().bottom(4).right(4).size(18).rounded(4)
+      .when(chip, (el) => el.child(div().id("sp-grow").absolute().bottom(4).right(4).size(18)
         .flex().items_center().justify_center().cursor_pointer()
         .bg(/^#[0-9a-f]{6}$/i.test(t.chrome) ? `${t.chrome}cc` : t.chrome).text_color(t.muted).hover((s) => s.bg(t.chrome).text_color(t.foreground))
         .tooltip(big ? "Smaller cover" : "Bigger cover")
@@ -233,15 +227,15 @@ export default class SpotifyMini extends View {
   slider(state, id, color, t) {
     return Slider.new(state).w_full().child(
       SliderTrack.new(state).flex().items_center().h(14).w_full().cursor_pointer().child(
-        SliderIndicator.new(state).relative().w_full().h(3).rounded(2).bg(t.border)
-          .range_style((fill) => fill.rounded(2).bg(color))
-          .child(SliderThumb.new(state).id(`${id}-thumb`).size(10).rounded(5).bg(t.foreground).ml(-5).mt(-3.5))));
+        SliderIndicator.new(state).relative().w_full().h(2).bg(t.border)
+          .range_style((fill) => fill.bg(color))
+          .child(SliderThumb.new(state).id(`${id}-thumb`).w(3).h(10).bg(t.foreground).ml(-1.5).mt(-4))));
   }
 
   render() {
     if (this.mode === "bar") return this.bar(theme());
     const t = theme();
-    const root = v_flex().id("sp-root").size_full().min_w(0).px(PAD).py(10).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden()
+    const root = v_flex().id("sp-root").size_full().min_w(0).px(PAD).py(10).font_family(mono()).bg(t.chrome).border_t(1).border_color(t.border).overflow_hidden()
       .on_size_change((size, cx) => {
         const w = Math.round(size.width);
         if (w === this.width) return;
@@ -265,12 +259,9 @@ export default class SpotifyMini extends View {
         .child(div().text_size(10.5).text_color(t.dim).child(`${clock(at)} / ${clock(n.duration)}`)))
       .child(v_flex().flex_none().items_end().gap(2)
         .child(h_flex().gap(1)
-          .child(this.button("sp-open", "external", "Open in Spotify", () => this.openSpotify(), t, { size: 11, color: t.dim }))
-          .child(this.button("sp-expand", "chevron-up", "More", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim })))
-        .child(h_flex().gap(2).items_center()
-          .child(this.transport("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t, 20, 10))
-          .child(this.playButton(t, 22, 10))
-          .child(this.transport("sp-next", "next", "Next", (cx) => this.send("next", cx), t, 20, 10)))));
+          .child(this.key("sp-open", "↗", "Open in Spotify", () => this.openSpotify(), t, { size: 11, color: t.dim }))
+          .child(this.key("sp-expand", "▴", "More", (cx) => this.toggleMode(cx), t, { size: 11, color: t.dim })))
+        .child(this.transportKeys(t, 11))));
   }
 
   expanded(root, t) {
@@ -282,28 +273,28 @@ export default class SpotifyMini extends View {
     const title = this.scrolling("e-title", n.title, 18, (el) => el.text_size(13.5).font_semibold().text_color(playing ? t.foreground : t.muted));
     // The links are two icons at the end of the title line, so they take no row of their own.
     const icons = h_flex().flex_none().gap(1)
-      .child(this.button("sp-copy", "link", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id)), t, { size: 12, color: t.dim }))
-      .child(this.button("sp-open", "external", "Open in Spotify", () => this.openSpotify(), t, { size: 12, color: t.dim }));
+      .child(this.key("sp-copy", "[cp]", "Copy link", (cx) => cx.write_to_clipboard(trackLink(n.id)), t, { size: 10.5, color: t.dim }))
+      .child(this.key("sp-open", "[↗]", "Open in Spotify", () => this.openSpotify(), t, { size: 10.5, color: t.dim }));
     const text = v_flex().flex_1().min_w(0).gap(2)
       .when(Boolean(n.id), (el) => el.child(h_flex().gap(6).items_center().min_w(0).child(div().flex_1().min_w(0).child(title)).child(icons)))
       .when(!n.id, (el) => el.child(title))
       .child(this.scrolling("e-artist", n.artist ?? "", 16, (el) => el.text_size(12).text_color(t.muted)))
       .child(this.scrolling("e-album", album, 15, (el) => el.text_size(11).text_color(t.dim)));
-    const controls = h_flex().justify_center().items_center().gap(10)
-      .child(this.toggle("sp-shuffle", "shuffle", "Shuffle", n.shuffle, "shuffle", t))
-      .child(this.transport("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t, 28, 13))
-      .child(this.playButton(t, 32, 13))
-      .child(this.transport("sp-next", "next", "Next", (cx) => this.send("next", cx), t, 28, 13))
-      .child(this.toggle("sp-repeat", "repeat", "Repeat", n.repeat, "repeat", t));
+    const controls = h_flex().justify_between().items_center()
+      .child(this.key("sp-shuffle", "[shuf]", n.shuffle ? "Shuffle is on" : "Shuffle", (cx) => this.send("shuffle", cx), t, { size: 11, color: t.dim, lit: n.shuffle }))
+      .child(this.transportKeys(t, 13))
+      .child(this.key("sp-repeat", "[rpt]", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 11, color: t.dim, lit: n.repeat }));
     // The times sit on the slider's own line.
     const seek = h_flex().gap(8).items_center().text_size(10.5).text_color(t.dim)
       .child(div().flex_none().child(clock(at)))
       .child(div().flex_1().min_w(0).child(this.slider(this.seek, "sp-seek", playing ? t.ansi2 : t.dim, t)))
       .child(div().flex_none().child(clock(n.duration)));
     return root.gap(8)
-      .child(h_flex().h(16).items_center()
-        .child(div().flex_1().text_size(10.5).font_medium().text_color(t.dim).child("NOW PLAYING"))
-        .child(this.button("sp-collapse", "chevron-down", "Less", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim })))
+      // A rule line, as a TUI draws a panel's title.
+      .child(h_flex().h(16).gap(6).items_center().text_size(10.5).text_color(t.dim)
+        .child(div().flex_none().child("─ now playing"))
+        .child(div().flex_1().h(1).bg(t.border))
+        .child(this.key("sp-collapse", "▾", "Less", (cx) => this.toggleMode(cx), t, { size: 11, color: t.dim })))
       // Big: the cover as wide as the block, the text under it. Otherwise side by side.
       .when(big, (el) => el.child(this.cover(t, this.bigSide(), true)).child(text))
       .when(!big, (el) => el.child(h_flex().gap(12).items_center().min_w(0).child(this.cover(t, 88, true)).child(text)))
