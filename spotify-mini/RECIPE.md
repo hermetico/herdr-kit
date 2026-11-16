@@ -16,11 +16,11 @@ a square `hover` highlight under the pointer). Compact or expanded, as kept in s
 
 - **Compact**, 66px: the 44px cover, square with a 1px `border`, then the title at 12.5px semibold
   (`foreground`, `muted` when paused), the artist at 11.5px `dim` and `elapsed / length` at 10.5px
-  `dim`. On the right, `↗` (open) and `▴` (expand) in `dim`, above `|◀ ▶ ▶|` (`‖` while playing).
+  `dim`. On the right, `[↗]` (open) and `[+]` (expand) in `dim`, above `|◀ ▶ ▶|` (`▌▌` while playing).
 - **Expanded**, 196px: a rule line, `─ now playing` in 10.5px `dim`, a 1px `border` line filling the
-  rest, and `▾` to collapse; the 88px cover beside the title (13.5px semibold) with `[cp]` (copy
+  rest, and `[−]` to collapse; the 88px cover beside the title (13.5px semibold) with `[cp]` (copy
   link) and `[↗]` (open) at the end of its line, the artist (12px `muted`) and `album · track N`
-  (11px `dim`); then `[shuf]` at the left, `|◀ ‖ ▶|` centred and `[rpt]` at the right, the toggles
+  (11px `dim`); then `[shuf]` at the left, `|◀ ▌▌ ▶|` centred and `[rpt]` at the right, the toggles
   `dim`, or `ansi2` while on; then a flat seek slider (a 2px line on `border`, filled in `ansi2`, or
   `dim` when paused, with a 3x10px `foreground` cursor) between the elapsed time and the length.
 - **Big cover**, in expanded mode: an 18px square chip in the cover's bottom-right corner, on

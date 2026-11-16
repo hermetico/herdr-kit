@@ -183,7 +183,7 @@ export default class SpotifyMini extends View {
     const playing = this.now?.state === "playing";
     return h_flex().flex_none().items_center().gap(2)
       .child(this.key("sp-prev", "|◀", "Previous", (cx) => this.send("previous", cx), t, { size }))
-      .child(this.key("sp-toggle", playing ? "‖" : "▶", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: size + 1, color: t.foreground, bold: true }))
+      .child(this.key("sp-toggle", playing ? "▌▌" : "▶", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: playing ? size - 2 : size, color: t.foreground }))
       .child(this.key("sp-next", "▶|", "Next", (cx) => this.send("next", cx), t, { size }));
   }
 
@@ -259,8 +259,8 @@ export default class SpotifyMini extends View {
         .child(div().text_size(10.5).text_color(t.dim).child(`${clock(at)} / ${clock(n.duration)}`)))
       .child(v_flex().flex_none().items_end().gap(2)
         .child(h_flex().gap(1)
-          .child(this.key("sp-open", "↗", "Open in Spotify", () => this.openSpotify(), t, { size: 11, color: t.dim }))
-          .child(this.key("sp-expand", "▴", "More", (cx) => this.toggleMode(cx), t, { size: 11, color: t.dim })))
+          .child(this.key("sp-open", "[↗]", "Open in Spotify", () => this.openSpotify(), t, { size: 10.5, color: t.dim }))
+          .child(this.key("sp-expand", "[+]", "More", (cx) => this.toggleMode(cx), t, { size: 10.5, color: t.dim })))
         .child(this.transportKeys(t, 11))));
   }
 
@@ -294,7 +294,7 @@ export default class SpotifyMini extends View {
       .child(h_flex().h(16).gap(6).items_center().text_size(10.5).text_color(t.dim)
         .child(div().flex_none().child("─ now playing"))
         .child(div().flex_1().h(1).bg(t.border))
-        .child(this.key("sp-collapse", "▾", "Less", (cx) => this.toggleMode(cx), t, { size: 11, color: t.dim })))
+        .child(this.key("sp-collapse", "[−]", "Less", (cx) => this.toggleMode(cx), t, { size: 10.5, color: t.dim })))
       // Big: the cover as wide as the block, the text under it. Otherwise side by side.
       .when(big, (el) => el.child(this.cover(t, this.bigSide(), true)).child(text))
       .when(!big, (el) => el.child(h_flex().gap(12).items_center().min_w(0).child(this.cover(t, 88, true)).child(text)))
