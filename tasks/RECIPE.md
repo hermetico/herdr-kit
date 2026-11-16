@@ -90,7 +90,11 @@ What runs:
 - `node tasks/mods/tasks/test_logic.mjs` prints `ok` and `herdr-app check tasks/mods/tasks` passes.
 - Focusing a terminal in a folder with `.workspaces/x.code-workspace` holding a `build` shell task
   shows the Run chip; the list shows `build` with a play icon.
-- Play opens a tab named `build` that prints `▶ build` and stays a shell; the bar gains a `build`
-  chip with restart and stop; stop closes the tab and the chip goes.
+- Play on `build` opens a tab named `build` that prints `▶ build`; while it runs the Run chip shows a
+  `working` dot and the row shows restart and stop.
+- When it ends, the tab keeps the output and says "✔ build finished"; the row and the chip show
+  `✓`. A task whose command exits 1 says "✖ … failed (exit 1)" and shows `✗`. Enter closes the tab
+  and the mark goes.
+- Stop closes the tab at once; Ctrl+C in the tab does too.
 - A `docker-build` task shows `dim` with "need a VS Code extension" on hover.
 - Focusing a terminal in a folder without any of the files hides the Run chip.
