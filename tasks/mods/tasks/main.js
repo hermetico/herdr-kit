@@ -6,7 +6,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { closeOverlay, exec, focused, home, openOverlay, panes, props, readTextFile, run, setShared, shared, spaces, theme, window } from "herdr";
-import { argv, baseName, findArgs, fromVscode, fromWorkspace, items, parentOf, parseJsonc, plan, runKey, tooBigToSearch } from "./logic.mjs";
+import { argv, baseName, findArgs, fromVscode, fromWorkspace, items, parentOf, parseJsonc, plan, runKey, stateOf, tooBigToSearch } from "./logic.mjs";
 
 const ICON = "mods/tasks/icons";
 const RUNNING = "tasks.running"; // key -> { tab, space, name, ws }
@@ -119,6 +119,14 @@ export default class Tasks extends View {
     return r ? allTabs().find((t) => t.id === r.tab) ?? null : null;
   }
 
+  // A run's state from its terminal title, which the script sets: running, done or failed.
+  stateOfKey(key) {
+    const tab = this.tabOf(key);
+    if (!tab) return null;
+    const pane = panes().find((p) => p.tab === tab.id && p.terminal);
+    return stateOf(pane?.title) ?? "running";
+  }
+
   start(item) {
     const p = plan(item, this.ctx());
     if (p.unsupported) return;
@@ -165,12 +173,6 @@ export default class Tasks extends View {
     run("tab.select", { id: r.tab });
   }
 
-  // The item a running key was started from, when the shown source still has it (for restart).
-  itemFor(key) {
-    if (!this.src) return null;
-    return items(this.src).find((i) => runKey(this.at?.machine, this.src.ws, i) === key) ?? null;
-  }
-
   // ---- drawing ----
 
   icon(id, name, tip, color, onClick, t) {
@@ -185,44 +187,50 @@ export default class Tasks extends View {
   }
 
   bar(t) {
-    const entries = Object.entries(this.running());
     const list = this.src ? items(this.src) : [];
     const root = h_flex().size_full().min_w(0).px(10).gap(6).items_center().text_size(11.8).overflow_hidden();
-    if (!list.length && !entries.length) return root;
-    const chip = () => h_flex().h(20).px(7).gap(5).flex_none().items_center().rounded(5);
-    return root
-      .when(list.length > 0, (el) => el.child(chip().id("tasks-open").max_w(220).cursor_pointer()
-        .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
-        .tooltip(`${list.length} tasks and configurations in ${this.chosen()?.label ?? ""}`)
-        .on_click(() => openOverlay({ mod: "tasks", kind: "popup", width: 340, height: listHeight(list.length), props: { role: "list" } }))
-        .child(svg(`${ICON}/play.svg`).size(11).flex_none().text_color(t.ansi2))
-        .child(div().flex_none().child("Run"))
-        .child(div().min_w(0).truncate().text_color(t.dim).child(baseName(this.src.ws)))))
-      .children(entries.map(([key, r], i) => chip().id(`run-${i}`).bg(t.raised).max_w(260)
-        .child(div().size(6).rounded(3).flex_none().bg(t.working))
-        .child(div().id(`run-name-${i}`).min_w(0).truncate().cursor_pointer().text_color(t.foreground)
-          .tooltip(`${r.name}: show its tab`).on_click(() => this.show(key)).child(r.name))
-        .child(this.icon(`re-${i}`, "rotate", "Restart", t.ansi2, () => this.restart(key, this.itemFor(key)), t))
-        .child(this.icon(`st-${i}`, "square", "Stop (closes its tab)", t.ansi1, () => this.stop(key), t))));
+    if (!list.length) return root;
+    // This folder's runs only: another workspace's tasks don't show here.
+    const states = list.map((i) => this.stateOfKey(runKey(this.at?.machine, this.src.ws, i))).filter(Boolean);
+    const count = (state) => states.filter((x) => x === state).length;
+    const [running, done, failed] = [count("running"), count("done"), count("failed")];
+    const mark = (n, glyph, color) => div().flex_none().text_color(color).child(n > 1 ? `${glyph}${n}` : glyph);
+    const tip = [running && `${running} running`, done && `${done} finished`, failed && `${failed} failed`].filter(Boolean).join(", ");
+    return root.child(h_flex().id("tasks-open").h(20).px(7).gap(5).flex_none().items_center().rounded(5).max_w(300).cursor_pointer()
+      .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .when(states.length > 0, (el) => el.bg(t.raised))
+      .tooltip(`${list.length} tasks and configurations in ${this.chosen()?.label ?? ""}${tip ? `: ${tip}` : ""}`)
+      .on_click(() => openOverlay({ mod: "tasks", kind: "popup", width: 340, height: listHeight(list.length), props: { role: "list" } }))
+      .child(svg(`${ICON}/play.svg`).size(11).flex_none().text_color(t.ansi2))
+      .child(div().flex_none().child("Run"))
+      .child(div().min_w(0).truncate().text_color(t.dim).child(baseName(this.src.ws)))
+      .when(running > 0, (el) => el.child(h_flex().flex_none().gap(3).items_center()
+        .child(div().size(6).rounded(3).bg(t.working)).when(running > 1, (c) => c.child(div().text_color(t.working).child(String(running))))))
+      .when(done > 0, (el) => el.child(mark(done, "✓", t.ansi2)))
+      .when(failed > 0, (el) => el.child(mark(failed, "✗", t.ansi1))));
   }
 
   row(item, t, i) {
     const p = plan(item, this.ctx());
     const bad = p.unsupported ?? null;
     const key = runKey(this.at?.machine, this.src.ws, item);
-    const tab = this.tabOf(key);
+    const state = this.stateOfKey(key);
+    const lead = state === "done" ? div().w(10).flex_none().text_size(11).text_color(t.ansi2).child("✓")
+      : state === "failed" ? div().w(10).flex_none().text_size(11).text_color(t.ansi1).child("✗")
+      : div().w(10).flex_none().flex().justify_center().child(div().size(6).rounded(3).bg(state ? t.working : "#00000000"));
+    const tip = state === "done" ? "Finished: show its tab" : state === "failed" ? "Failed: show its tab" : "Running: show its tab";
     return h_flex().id(`row-${i}`).h(ROW_H).flex_none().px(8).gap(6).items_center().rounded(6)
       .hover((s) => s.bg(t.hover))
       .when(Boolean(bad), (el) => el.tooltip(bad))
-      .when(!bad && Boolean(item.detail), (el) => el.tooltip(item.detail))
-      .child(div().size(6).rounded(3).flex_none().bg(tab ? t.working : "#00000000"))
+      .when(!bad && !state && Boolean(item.detail), (el) => el.tooltip(item.detail))
+      .child(lead)
       .child(div().flex_1().min_w(0).truncate().text_color(bad ? t.dim : t.foreground)
-        .when(Boolean(tab), (el) => el.id(`show-${i}`).cursor_pointer().on_click(() => this.show(key)))
+        .when(Boolean(state), (el) => el.id(`show-${i}`).cursor_pointer().tooltip(tip).on_click(() => this.show(key)))
         .child(item.name))
-      .when(Boolean(tab), (el) => el
-        .child(this.icon(`lre-${i}`, "rotate", "Restart", t.ansi2, () => this.restart(key, item), t))
-        .child(this.icon(`lst-${i}`, "square", "Stop (closes its tab)", t.ansi1, () => this.stop(key), t)))
-      .when(!tab && !bad, (el) => el.child(this.icon(`go-${i}`, "play", "Run in a new tab", t.ansi2, () => this.start(item), t)));
+      .when(Boolean(state), (el) => el
+        .child(this.icon(`lre-${i}`, "rotate", state === "running" ? "Restart" : "Run again", t.ansi2, () => this.restart(key, item), t))
+        .child(this.icon(`lst-${i}`, "square", state === "running" ? "Stop (closes its tab)" : "Close its tab", t.ansi1, () => this.stop(key), t)))
+      .when(!state && !bad, (el) => el.child(this.icon(`go-${i}`, "play", "Run in a new tab", t.ansi2, () => this.start(item), t)));
   }
 
   list(t) {

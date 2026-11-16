@@ -197,7 +197,18 @@ export function configSteps(cfg, ctx) {
 /** An item's steps, or { unsupported }. */
 export const plan = (item, ctx) => (item.kind === "task" ? taskSteps(item.name, ctx) : configSteps(item.cfg, ctx));
 
-/** The terminal's argv: prints the name, runs the steps, stops at the first failure, then stays a shell. */
+// The terminal title marks a run's state, so the mod can read it from panes() without polling.
+export const MARK = { running: "▶", done: "✔", failed: "✖" };
+
+/** A pane title's state: "running", "done" or "failed", or null when it isn't one of ours. */
+export function stateOf(title) {
+  for (const [state, mark] of Object.entries(MARK)) if (String(title ?? "").startsWith(`${mark} `)) return state;
+  return null;
+}
+
+/** The terminal's argv. It titles the terminal "▶ name" and runs the steps, stopping at the first
+ *  failure. Then it prints the result, titles the terminal "✔ name" or "✖ name", and waits for Enter
+ *  before closing, so the output stays readable. Ctrl+C ends it at once and closes the tab. */
 export function argv(name, steps) {
   const one = (s) => [
     `cd ${quote(s.cwd)}`,
@@ -205,11 +216,17 @@ export function argv(name, steps) {
     ...s.env.map(([k, v]) => `export ${k}=${quote(v)}`),
     s.line,
   ].join(" && ");
-  const body = steps.map((s) => `(${one(s)})`).join(" && ");
+  const n = quote(name);
+  const title = (mark) => `printf '\\033]0;%s %s\\007' '${mark}' ${n}`;
   const script = [
-    `printf '\\033[1m▶ %s\\033[0m\\n' ${quote(name)}`,
-    `${body} || printf '\\033[31m✖ %s stopped with an error\\033[0m\\n' ${quote(name)}`,
-    `exec "\${SHELL:-/bin/sh}"`,
+    title(MARK.running),
+    `printf '\\033[1m▶ %s\\033[0m\\n' ${n}`,
+    `${steps.map((s) => `(${one(s)})`).join(" && ")}`,
+    `status=$?`,
+    `if [ "$status" -eq 0 ]; then ${title(MARK.done)}; printf '\\n\\033[32m✔ %s finished\\033[0m\\n' ${n};`,
+    `else ${title(MARK.failed)}; printf '\\n\\033[31m✖ %s failed (exit %s)\\033[0m\\n' ${n} "$status"; fi`,
+    `printf '\\033[2mPress Enter to close this tab.\\033[0m'`,
+    `read -r _`,
   ].join("\n");
   return ["sh", "-c", script];
 }

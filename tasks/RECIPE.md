@@ -2,24 +2,26 @@
 
 VS Code's tasks and launch configurations of the folder you're in, run from Herdr's status bar. A Run
 chip appears when the focused folder has a `.vscode/tasks.json`, a `.vscode/launch.json` or a
-`*.code-workspace` file. It opens a list with a play button per item. Each running item gets its own
-chip in the bar with restart and stop. Items run as plain shell commands in a tab of their own;
-launch configurations run without a debugger.
+`*.code-workspace` file, with a mark when one of its items is running, finished or failed. It opens a
+list with a play button per item. Items run as plain shell commands in a tab of their own; launch
+configurations run without a debugger. A finished run keeps its output and says whether it passed.
 
 ## What you see
 
-- **In the status bar**, a block of the layout's status row, 11.8px text, 10px side padding:
-  - A Run chip when the folder has items: a green play icon in `ansi2`, "Run" in `muted`, and the
-    workspace folder's name in `dim`, at most 220px. Hover names the item count and the source file.
-    Nothing at all when there are no items and nothing runs.
-  - One chip per running item, on `raised`, at most 260px: a 6px `working` dot, the name in
-    `foreground`, a restart icon in `ansi2` and a stop icon in `ansi1`.
+- **In the status bar**, a block of the layout's status row, 11.8px text, 10px side padding: one
+  Run chip when the focused folder has items, and nothing at all otherwise. The chip holds a green
+  play icon in `ansi2`, "Run" in `muted`, and the workspace folder's name in `dim`, at most 300px.
+  When this folder's items have open tabs, the chip sits on `raised` and adds a 6px `working` dot
+  (with a count past one) for running ones, `✓` in `ansi2` for finished ones and `✗` in `ansi1` for
+  failed ones, each with a count past one. Hover names the item count, the source file and the runs.
 - **The list**, a 340px popup at the pointer, up to 560px tall, on `popover`. Its root has that exact height: a popup sizes to its content, and a `size_full` root collapses to the header.
   - A 40px header: "Run" semibold, then the source as a chip on `raised`. With several source
     files the chip reads `label  1/2` and a click switches to the next one.
-  - **Launch** and **Tasks** sections with 11px `dim` titles. Rows are 28px: a 6px dot in
-    `working` while the item's tab is open, the name, and a play icon, or restart and stop while it
-    runs. Hover shows a task's `detail`. Items that can't run are `dim`, with the reason on hover.
+  - **Launch** and **Tasks** sections with 11px `dim` titles. Rows are 28px: a 10px lead with a
+    6px `working` dot while running, `✓` in `ansi2` when finished or `✗` in `ansi1` when failed,
+    then the name, then a play icon, or restart and stop while its tab is open. Clicking the name of
+    an item with an open tab shows that tab. Hover shows a task's `detail`. Items that can't run are
+    `dim`, with the reason on hover.
   - "No tasks.json, launch.json or .code-workspace here or in the folders above." when empty, and a
     parse error in `blocked`.
 
@@ -36,8 +38,13 @@ launch configurations run without a debugger.
   one is `${workspaceFolder}`, and each can be named with `${workspaceFolder:Name}`. Its `tasks` and
   `launch` sections are read like `tasks.json` and `launch.json`.
 - **Play** only from the play icon, never from a click on the row, so a stray click can't start a
-  deploy. It opens a tab named after the item in the shown space, running `sh -c`: print `▶ name`,
-  run each step in order, stop at the first failure with a red line, then stay a shell.
+  deploy. It opens a tab named after the item in the shown space, running `sh -c`: title the
+  terminal `▶ name`, print `▶ name`, run each step in order and stop at the first failure. Then it
+  titles the terminal `✔ name` and prints a green "finished" line, or `✖ name` and a red "failed
+  (exit N)" line, and waits for Enter before the tab closes, so the output stays readable. Ctrl+C
+  ends the run and closes the tab at once.
+- **States** come from those titles: the mod reads the title of the pane in the item's tab
+  (`panes()`), so it needs no polling of its own. A tab without one of the marks counts as running.
 - **Running items** are kept in shared state `tasks.running` by key: machine, workspace folder,
   kind and name. `tab.new` doesn't say which tab it made, so the start is put in `tasks.pending`, and
   the bar copy finds the new tab with that name every 500 ms, for up to 20 s. A tab that's gone

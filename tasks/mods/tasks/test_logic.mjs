@@ -1,7 +1,7 @@
 // Self-check for the tasks mod's pure helpers: node tasks/mods/tasks/test_logic.mjs
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { argv, configSteps, findArgs, fromVscode, fromWorkspace, items, parseJsonc, plan, quote, resolvePath, runKey, taskSteps, tooBigToSearch } from "./logic.mjs";
+import { argv, configSteps, stateOf, findArgs, fromVscode, fromWorkspace, items, parseJsonc, plan, quote, resolvePath, runKey, taskSteps, tooBigToSearch } from "./logic.mjs";
 
 // JSON with comments and trailing commas; strings keep their slashes.
 assert.deepEqual(parseJsonc(`{ // a comment
@@ -62,16 +62,26 @@ assert.equal(taskSteps("open", { ...plat, os: "linux" }).steps[0].line, "xdg-ope
 assert.equal(quote("a'b"), `'a'\\''b'`);
 assert.equal(runKey(null, "/home/alex/acme", { kind: "task", name: "build" }), "|/home/alex/acme|task|build");
 
-// The argv really runs: steps in order, a failure stops the rest, and an error line is printed.
+// The argv really runs: steps in order, a failure stops the rest, the result is printed and titled.
 const run = (steps) => {
   const [sh, c, script] = argv("demo", steps);
-  return execFileSync(sh, [c, script.replace(/\nexec .*$/, "")], { env: { ...process.env, SHELL: "/bin/sh" } }).toString();
+  return execFileSync(sh, [c, script], { input: "\n" }).toString();
 };
 const ok = run([{ cwd: "/tmp", env: [["GREETING", "hi there"]], line: "echo \"$GREETING\" && pwd" }, { cwd: "/", env: [], line: "echo second" }]);
-assert.match(ok, /▶ demo/);
+assert.match(ok, /\]0;▶ demo\x07/);
 assert.match(ok, /hi there\n\/(private\/)?tmp\nsecond/);
-const failed = run([{ cwd: "/tmp", env: [], line: "false" }, { cwd: "/", env: [], line: "echo never" }]);
+assert.match(ok, /\]0;✔ demo\x07/);
+assert.match(ok, /✔ demo finished/);
+assert.match(ok, /Press Enter to close this tab/);
+const failed = run([{ cwd: "/tmp", env: [], line: "exit 3" }, { cwd: "/", env: [], line: "echo never" }]);
 assert.doesNotMatch(failed, /never/);
-assert.match(failed, /demo stopped with an error/);
+assert.match(failed, /\]0;✖ demo\x07/);
+assert.match(failed, /✖ demo failed \(exit 3\)/);
+
+assert.equal(stateOf("▶ Check: Tests"), "running");
+assert.equal(stateOf("✔ Check: Tests"), "done");
+assert.equal(stateOf("✖ Check: Tests"), "failed");
+assert.equal(stateOf("fish ~/acme"), null);
+assert.equal(stateOf(null), null);
 
 console.log("ok");
