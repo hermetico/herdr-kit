@@ -11,7 +11,7 @@ import { artUrl, clock, command, elapsed, panDue, panMs, parseState, progress, t
 const ICON = "mods/spotify-mini/icons";
 const ART_DIR = "data/spotify-mini/art";
 const EXPANDED = "spotify-mini.expanded";
-const HEIGHT = { compact: 66, expanded: 252 };
+const HEIGHT = { compact: 66, expanded: 226 };
 const FRONT_MS = 3000;
 const BACK_MS = 15000;
 const SEEK_STEPS = 1000;
@@ -30,7 +30,7 @@ export default class SpotifyMini extends View {
     this.height = null;
     this.sizes = {}; // scrolling name -> { box, text } widths
     this.pans = {}; // scrolling name -> { phase: 0 or 1, at }
-    this.dragging = { seek: false, volume: false };
+    this.dragging = false;
     if (checking() || !supported()) return;
     if (this.mode === "player") this.sliders();
     this.read(cx);
@@ -44,14 +44,11 @@ export default class SpotifyMini extends View {
 
   sliders() {
     this.seek = SliderState.new({ min: 0, max: SEEK_STEPS, step: 1, value: 0 });
-    this.seek.on("change", () => { this.dragging.seek = true; });
+    this.seek.on("change", () => { this.dragging = true; });
     this.seek.on("release", (v, cx) => {
-      this.dragging.seek = false;
+      this.dragging = false;
       if (this.now?.duration) this.send("seek", cx, (Number(v) / SEEK_STEPS) * this.now.duration);
     });
-    this.volume = SliderState.new({ min: 0, max: 100, step: 1, value: 0 });
-    this.volume.on("change", () => { this.dragging.volume = true; });
-    this.volume.on("release", (v, cx) => { this.dragging.volume = false; this.send("volume", cx, Number(v)); });
   }
 
   read(cx) {
@@ -89,11 +86,10 @@ export default class SpotifyMini extends View {
     if (flipped || this.now?.state === "playing") cx.notify();
   }
 
-  // The sliders follow the player unless the person is dragging them.
+  // The seek slider follows the player unless the person is dragging it.
   syncSliders() {
-    if (!this.seek || !this.now?.title) return;
-    if (!this.dragging.seek) this.seek.set_value(Math.round(progress(this.now, (Date.now() - this.readAt) / 1000) * SEEK_STEPS));
-    if (!this.dragging.volume && this.now.volume !== null) this.volume.set_value(this.now.volume);
+    if (!this.seek || !this.now?.title || this.dragging) return;
+    this.seek.set_value(Math.round(progress(this.now, (Date.now() - this.readAt) / 1000) * SEEK_STEPS));
   }
 
   // The player's block shows only while a track is loaded, at the height of its mode. A hidden copy
@@ -176,8 +172,7 @@ export default class SpotifyMini extends View {
   cover(t, px) {
     const n = this.now;
     const path = n?.art && this.art[n.art];
-    return div().id(`sp-cover-${px}`).size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised).cursor_pointer()
-      .tooltip("Open in Spotify").on_click(() => this.openSpotify())
+    return div().id(`sp-cover-${px}`).size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised)
       .child(path ? image(path).size(px) : div().size_full().flex().items_center().justify_center()
         .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)));
   }
@@ -187,7 +182,7 @@ export default class SpotifyMini extends View {
       SliderTrack.new(state).flex().items_center().h(14).w_full().cursor_pointer().child(
         SliderIndicator.new(state).relative().w_full().h(3).rounded(2).bg(t.border)
           .range_style((fill) => fill.rounded(2).bg(color))
-          .child(SliderThumb.new(state).id(`${id}-thumb`).size(10).rounded(5).bg(t.foreground).ml(-5))));
+          .child(SliderThumb.new(state).id(`${id}-thumb`).size(10).rounded(5).bg(t.foreground).ml(-5).mt(-3.5))));
   }
 
   render() {
@@ -210,10 +205,12 @@ export default class SpotifyMini extends View {
         .child(div().text_size(10.5).text_color(t.dim).child(`${clock(at)} / ${clock(n.duration)}`)))
       .child(v_flex().flex_none().items_end().gap(2)
         .child(h_flex().gap(1)
+          .child(this.button("sp-open", "external", "Open in Spotify", () => this.openSpotify(), t, { size: 11, color: t.dim }))
+          .child(this.button("sp-expand", "chevron-up", "More", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim })))
+        .child(h_flex().gap(1)
           .child(this.button("sp-prev", "previous", "Previous", (cx) => this.send("previous", cx), t))
           .child(this.button("sp-toggle", playing ? "pause" : "play", playing ? "Pause" : "Play", (cx) => this.send("toggle", cx), t, { size: 13 }))
-          .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t)))
-        .child(this.button("sp-expand", "chevron-up", "More", (cx) => this.toggleMode(cx), t, { size: 12, color: t.dim }))));
+          .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t)))));
   }
 
   expanded(root, t) {
@@ -249,11 +246,7 @@ export default class SpotifyMini extends View {
           .on_click((_e, cx) => this.send("toggle", cx))
           .child(svg(`${ICON}/${playing ? "pause" : "play"}.svg`).size(14)))
         .child(this.button("sp-next", "next", "Next", (cx) => this.send("next", cx), t, { size: 14 }))
-        .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat })))
-      .when(n.volume !== null, (el) => el.child(h_flex().gap(8).items_center()
-        .child(svg(`${ICON}/volume.svg`).size(13).flex_none().text_color(t.dim))
-        .child(div().flex_1().child(this.slider(this.volume, "sp-volume", t.muted, t)))
-        .child(div().w(30).flex_none().text_size(10.5).text_color(t.dim).child(`${n.volume}%`))));
+        .child(this.button("sp-repeat", "repeat", n.repeat ? "Repeat is on" : "Repeat", (cx) => this.send("repeat", cx), t, { size: 13, lit: n.repeat })));
   }
 
   bar(t) {

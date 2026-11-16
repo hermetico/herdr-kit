@@ -50,7 +50,6 @@ export function command(name, value) {
     case "next": return tell("next track");
     case "shuffle": return tell("set shuffling to not shuffling");
     case "repeat": return tell("set repeating to not repeating");
-    case "volume": return tell(`set sound volume to ${whole(value, 0, 100)}`);
     case "seek": return tell(`set player position to ${whole(value, 0, 24 * 3600)}`);
     default: return null;
   }

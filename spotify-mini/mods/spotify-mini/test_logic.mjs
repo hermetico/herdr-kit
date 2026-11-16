@@ -22,9 +22,8 @@ assert.match(READ_SCRIPT, /is running/);
 
 // Commands, with their values clamped to whole numbers in range
 assert.equal(command("toggle"), 'tell application "Spotify" to playpause');
-assert.equal(command("volume", 64.6), 'tell application "Spotify" to set sound volume to 65');
-assert.equal(command("volume", 400), 'tell application "Spotify" to set sound volume to 100');
-assert.equal(command("volume", "1; do shell script \"x\""), 'tell application "Spotify" to set sound volume to 0');
+assert.equal(command("seek", "1; do shell script \"x\""), 'tell application "Spotify" to set player position to 0');
+assert.equal(command("volume", 50), null);
 assert.equal(command("seek", 95.2), 'tell application "Spotify" to set player position to 95');
 assert.equal(command("seek", -3), 'tell application "Spotify" to set player position to 0');
 assert.equal(command("shuffle"), 'tell application "Spotify" to set shuffling to not shuffling');
