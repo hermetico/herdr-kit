@@ -20,7 +20,7 @@ vertical padding, compact or expanded as kept in shared `spotify-mini.expanded`:
   `foreground`, next and repeat, the toggles in `ansi2` while on; then a seek slider (3px groove on
   `border`, fill in `ansi2`, `dim` when paused, a 10px `foreground` knob centred on the groove with
   `ml(-5)` and `mt(-3.5)`) with the times under it.
-- **Big cover**, in expanded mode: an 18px chip in the cover's top-right corner, on `chrome` at 80%
+- **Big cover**, in expanded mode: an 18px chip in the cover's bottom-right corner, on `chrome` at 80%
   opacity, grows the cover to the block's width inside its padding, with the text and links under
   it; the block grows to that side plus 216px. The chip then shrinks it back. Kept in shared
   `spotify-mini.big-cover`; the block's width comes from `on_size_change`, so resizing the sidebar

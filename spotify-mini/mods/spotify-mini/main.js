@@ -188,7 +188,7 @@ export default class SpotifyMini extends View {
         .child(text)));
   }
 
-  // The cover. With `chip`, a small button in its top-right corner grows or shrinks it.
+  // The cover. With `chip`, a small button in its bottom-right corner grows or shrinks it.
   cover(t, px, chip = false) {
     const n = this.now;
     const path = n?.art && this.art[n.art];
@@ -196,7 +196,7 @@ export default class SpotifyMini extends View {
     return div().id(`sp-cover-${px}`).relative().size(px).flex_none().rounded(px > 60 ? 8 : 6).overflow_hidden().bg(t.raised)
       .child(path ? image(path).size(px) : div().size_full().flex().items_center().justify_center()
         .child(svg(`${ICON}/note.svg`).size(Math.round(px / 2.6)).text_color(t.dim)))
-      .when(chip, (el) => el.child(div().id("sp-grow").absolute().top(4).right(4).size(18).rounded(4)
+      .when(chip, (el) => el.child(div().id("sp-grow").absolute().bottom(4).right(4).size(18).rounded(4)
         .flex().items_center().justify_center().cursor_pointer()
         .bg(/^#[0-9a-f]{6}$/i.test(t.chrome) ? `${t.chrome}cc` : t.chrome).text_color(t.muted).hover((s) => s.bg(t.chrome).text_color(t.foreground))
         .tooltip(big ? "Smaller cover" : "Bigger cover")
