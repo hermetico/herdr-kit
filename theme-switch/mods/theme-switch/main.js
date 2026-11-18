@@ -6,6 +6,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { appHome, closeOverlay, layout, layouts, notify, openOverlay, props, readTextFile, run, settings, theme, themes, writeTextFile } from "herdr";
 import { appearanceAfterPick, groups, halves, withAppearance } from "./logic.mjs";
 
+const MENU = { w: 300, h: 560 }, SEGMENT_H = 48;
 const MODES = [["light", "Light"], ["dark", "Dark"], ["system", "System"]];
 const settingsPath = () => `${appHome()}/settings.json`;
 const mode = () => (settings().appearance === "light" || settings().appearance === "dark" ? settings().appearance : "system");
@@ -27,7 +28,7 @@ export default class ThemeSwitch extends View {
       .child(div().id("theme-switch").p(4).rounded(5).cursor_pointer().text_color(t.dim)
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
         .tooltip("Theme")
-        .on_click(() => openOverlay({ mod: "theme-switch", kind: "popup", at: "pointer", width: 300, height: 560, props: { menu: true } }))
+        .on_click(() => openOverlay({ mod: "theme-switch", kind: "popup", at: "pointer", width: MENU.w, height: MENU.h, props: { menu: true } }))
         .child(svg("mods/theme-switch/palette.svg").size(17)));
   }
 
@@ -55,9 +56,10 @@ export default class ThemeSwitch extends View {
         .child(div().text_size(10.5).text_color(t.dim).child(item.light ? "light" : "dark"))
         .child(div().w(14).flex_none().when(on, (e) => e.child(svg("mods/theme-switch/check.svg").size(12).text_color(t.accent))));
     };
-    return v_flex().size_full().bg(t.popover).text_color(t.foreground)
+    // A popup sizes to its content: a flex_1 list would get no height, so the sizes are explicit.
+    return v_flex().w(MENU.w).h(MENU.h).bg(t.popover).text_color(t.foreground)
       .child(segment)
-      .child(v_flex().id("theme-list").flex_1().min_h(0).pb(8).overflow_y_scrollbar()
+      .child(v_flex().id("theme-list").h(MENU.h - SEGMENT_H).flex_none().pb(8).overflow_y_scrollbar()
         .children(groups(all, layouts()).map((g) => v_flex().gap(1)
           .child(div().px(14).pt(8).pb(3).text_size(10.5).font_semibold().text_color(t.dim).child(g.name.toUpperCase()))
           .children(g.items.map(row)))));
