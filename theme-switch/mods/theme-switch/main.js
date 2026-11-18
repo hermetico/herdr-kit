@@ -3,13 +3,12 @@
 // layout's theme for that lightness, never the layout itself.
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { appHome, closeOverlay, layout, layouts, notify, openOverlay, props, readTextFile, run, settings, theme, themes, writeTextFile } from "herdr";
-import { appearanceAfterPick, groups, halves, withAppearance } from "./logic.mjs";
+import { appHome, closeOverlay, layout, layouts, notify, openOverlay, props, readTextFile, run, theme, themes, writeTextFile } from "herdr";
+import { appearanceAfterPick, appearanceOf, groups, halves, withAppearance } from "./logic.mjs";
 
 const MENU = { w: 300, h: 560 }, SEGMENT_H = 48;
 const MODES = [["light", "Light"], ["dark", "Dark"], ["system", "System"]];
 const settingsPath = () => `${appHome()}/settings.json`;
-const mode = () => (settings().appearance === "light" || settings().appearance === "dark" ? settings().appearance : "system");
 
 async function setAppearance(next) {
   const text = await readTextFile(settingsPath());
@@ -17,6 +16,20 @@ async function setAppearance(next) {
 }
 
 export default class ThemeSwitch extends View {
+  // settings() leaves out `appearance`, so the menu reads settings.json for it.
+  init(p, cx) {
+    this.mode = "system";
+    if (!p?.overlay) return;
+    cx.spawn(async (cx) => { this.mode = appearanceOf(await readTextFile(settingsPath()).catch(() => null)); cx.notify(); });
+  }
+
+  // Shows the new appearance at once, and writes it.
+  appear(next, cx) {
+    this.mode = next;
+    cx.notify();
+    setAppearance(next).catch((e) => notify({ title: "Theme", body: String(e?.message ?? e), level: "error" }));
+  }
+
   render(cx) {
     return props()?.overlay ? this.menu(cx) : this.button();
   }
@@ -33,24 +46,24 @@ export default class ThemeSwitch extends View {
   }
 
   menu() {
-    const t = theme(), all = themes(), now = halves(layout()?.theme, all), m = mode();
-    const pick = (item) => {
+    const t = theme(), all = themes(), now = halves(layout()?.theme, all), m = this.mode;
+    const pick = (item, cx) => {
       run("app.theme", { name: item.name });
       const flip = appearanceAfterPick(m, item.light);
-      if (flip) setAppearance(flip).catch((e) => notify({ title: "Theme", body: String(e?.message ?? e), level: "error" }));
+      if (flip) this.appear(flip, cx);
     };
     const segment = h_flex().id("theme-modes").m(10).p(2).gap(2).rounded(7).bg(t.raised).flex_none()
       .children(MODES.map(([key, label]) => div().id(`theme-mode-${key}`).flex_1().h(24).flex().items_center().justify_center().rounded(5)
         .text_size(12).cursor_pointer().text_color(m === key ? t.foreground : t.muted).when(m === key, (e) => e.bg(t.selected))
         .hover((s) => s.text_color(t.foreground))
-        .on_click(() => { setAppearance(key).catch((e) => notify({ title: "Theme", body: String(e?.message ?? e), level: "error" })); })
+        .on_click((_e, cx) => this.appear(key, cx))
         .child(label)));
     const swatch = (c) => div().size(10).rounded(5).border_1().border_color(t.border).bg(c);
     const row = (item) => {
       const c = item.colors ?? {}, on = item.light ? now.light === item.name : now.dark === item.name;
       return h_flex().id(`theme-${item.name}`).h(28).px(10).mx(4).gap(8).items_center().rounded(5).cursor_pointer()
         .when(on, (e) => e.bg(t.selected)).hover((s) => s.bg(t.hover))
-        .on_click(() => pick(item))
+        .on_click((_e, cx) => pick(item, cx))
         .child(h_flex().gap(3).flex_none().child(swatch(c.background)).child(swatch(c.accent)).child(swatch(c.ansi2)).child(swatch(c.ansi1)))
         .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(on ? t.foreground : t.muted).child(item.label))
         .child(div().text_size(10.5).text_color(t.dim).child(item.light ? "light" : "dark"))

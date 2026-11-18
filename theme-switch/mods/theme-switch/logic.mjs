@@ -36,6 +36,14 @@ export function halves(theme, themes) {
   return light ? { light: theme, dark: null } : { light: null, dark: theme };
 }
 
+/** The appearance settings.json's text sets: "light", "dark", or "system" when it sets none. */
+export function appearanceOf(text) {
+  try {
+    const a = JSON.parse(text || "{}").appearance;
+    return a === "light" || a === "dark" ? a : "system";
+  } catch { return "system"; }
+}
+
 /** settings.json's text with `appearance` set to "light" or "dark", or removed for "system". */
 export function withAppearance(text, mode) {
   const s = JSON.parse(text || "{}");

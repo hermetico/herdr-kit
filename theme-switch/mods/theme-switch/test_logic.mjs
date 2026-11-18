@@ -1,6 +1,6 @@
 // Self-check for theme-switch's helpers: node mods/theme-switch/test_logic.mjs
 import assert from "node:assert/strict";
-import { appearanceAfterPick, groups, halves, withAppearance } from "./logic.mjs";
+import { appearanceAfterPick, appearanceOf, groups, halves, withAppearance } from "./logic.mjs";
 
 const th = (name, light = false) => ({ name, light, colors: {} });
 const g = groups([th("graphite"), th("catppuccin-latte", true), th("catppuccin-mocha"), th("ayu-light", true), th("win98", true), th("catppuccin-frappe")], ["main", "win98"]);
@@ -20,4 +20,8 @@ assert.equal(JSON.parse(withAppearance('{"zoom":1}', "system")).zoom, 1);
 assert.equal(appearanceAfterPick("system", true), null);
 assert.equal(appearanceAfterPick("dark", true), "light");
 assert.equal(appearanceAfterPick("light", true), null);
+assert.equal(appearanceOf('{"appearance":"dark"}'), "dark");
+assert.equal(appearanceOf('{"zoom":1}'), "system");
+assert.equal(appearanceOf(null), "system");
+assert.equal(appearanceOf("not json"), "system");
 console.log("ok");
