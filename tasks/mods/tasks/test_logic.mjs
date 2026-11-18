@@ -65,7 +65,9 @@ assert.equal(runKey(null, "/home/alex/acme", { kind: "task", name: "build" }), "
 // The argv really runs: steps in order, a failure stops the rest, the result is printed and titled.
 const run = (steps) => {
   const [sh, c, script] = argv("demo", steps);
-  return execFileSync(sh, [c, script], { input: "\n" }).toString();
+  // Without HC_TERMINAL_ID the script stops at Enter rather than ending the terminal it runs in.
+  const env = { ...process.env }; delete env.HC_TERMINAL_ID;
+  return execFileSync(sh, [c, script], { input: "\n", env }).toString();
 };
 const ok = run([{ cwd: "/tmp", env: [["GREETING", "hi there"]], line: "echo \"$GREETING\" && pwd" }, { cwd: "/", env: [], line: "echo second" }]);
 assert.match(ok, /\]0;▶ demo\x07/);
@@ -73,6 +75,7 @@ assert.match(ok, /hi there\n\/(private\/)?tmp\nsecond/);
 assert.match(ok, /\]0;✔ demo\x07/);
 assert.match(ok, /✔ demo finished/);
 assert.match(ok, /Press Enter to close this tab/);
+assert.match(argv("demo", [])[2], /exec hc kill "\$HC_TERMINAL_ID"/);
 const failed = run([{ cwd: "/tmp", env: [], line: "exit 3" }, { cwd: "/", env: [], line: "echo never" }]);
 assert.doesNotMatch(failed, /never/);
 assert.match(failed, /\]0;✖ demo\x07/);

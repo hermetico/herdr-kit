@@ -208,7 +208,8 @@ export function stateOf(title) {
 
 /** The terminal's argv. It titles the terminal "▶ name" and runs the steps, stopping at the first
  *  failure. Then it prints the result, titles the terminal "✔ name" or "✖ name", and waits for Enter
- *  before closing, so the output stays readable. Ctrl+C ends it at once and closes the tab. */
+ *  before closing, so the output stays readable. Enter ends the terminal with `hc kill`, which closes
+ *  the tab. Ctrl+C ends it at once and closes the tab. */
 export function argv(name, steps) {
   const one = (s) => [
     `cd ${quote(s.cwd)}`,
@@ -227,6 +228,8 @@ export function argv(name, steps) {
     `else ${title(MARK.failed)}; printf '\\n\\033[31m✖ %s failed (exit %s)\\033[0m\\n' ${n} "$status"; fi`,
     `printf '\\033[2mPress Enter to close this tab.\\033[0m'`,
     `read -r _`,
+    // Herdr starts a shell when the program ends, so the tab would stay open: end the terminal itself.
+    `if [ -n "$HC_TERMINAL_ID" ] && command -v hc >/dev/null 2>&1; then exec hc kill "$HC_TERMINAL_ID"; fi`,
   ].join("\n");
   return ["sh", "-c", script];
 }
