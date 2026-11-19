@@ -57,7 +57,15 @@ export function fromVscode(root, tasksJson, launchJson) {
     folders: {},
     tasks: Array.isArray(tasksJson?.tasks) ? tasksJson.tasks : [],
     configs: Array.isArray(launchJson?.configurations) ? launchJson.configurations : [],
+    inputs: inputsOf(tasksJson?.inputs, launchJson?.inputs),
   };
+}
+
+/** The `inputs` of tasks and launch, by id. The tasks' own come first when both define one. */
+function inputsOf(...lists) {
+  const out = {};
+  for (const list of lists) for (const i of Array.isArray(list) ? list : []) if (i?.id && !(i.id in out)) out[i.id] = i;
+  return out;
 }
 
 export function fromWorkspace(path, data) {
@@ -73,6 +81,8 @@ export function fromWorkspace(path, data) {
     folders,
     tasks: Array.isArray(data?.tasks?.tasks) ? data.tasks.tasks : [],
     configs: Array.isArray(data?.launch?.configurations) ? data.launch.configurations : [],
+    inputs: inputsOf(data?.tasks?.inputs, data?.launch?.inputs),
+    settings: data?.settings && typeof data.settings === "object" ? data.settings : {},
   };
 }
 
@@ -91,15 +101,61 @@ export const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
 const words = (list) => (list ?? []).map(quote).join(" ");
 const valueOf = (a) => (a && typeof a === "object" ? a.value : a);
 
-// Variables only VS Code can answer: an input box, a command, the open editor.
-const ASKS = /\$\{(input|command|file|selectedText|lineNumber|relativeFile|fileBasename|fileDirname|cwd|config|defaultBuildTask)[^}]*\}/;
-const asks = (v) => (typeof v === "string" ? ASKS.exec(v)?.[0] ?? null : null);
+// Variables only VS Code can answer: a command, the open editor. Inputs the mod can ask for itself.
+const ASKS = /\$\{(input|command|file|selectedText|lineNumber|relativeFile|fileBasename|fileDirname|cwd|config|defaultBuildTask)[^}]*\}/g;
+const ASKABLE = new Set(["pickString", "promptString"]);
+/** The first variable in `v` the mod can't fill, or null. An input it can ask for is fine. */
+const asker = (ctx) => (v) => {
+  if (typeof v !== "string") return null;
+  for (const m of v.matchAll(ASKS)) {
+    const id = m[0].match(/^\$\{input:([^}]+)\}$/)?.[1];
+    if (!id || !ASKABLE.has(ctx.inputs?.[id]?.type)) return m[0];
+  }
+  return null;
+};
+/** Every string inside a value, however deep. */
+const strings = (v) => (typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v).flatMap(strings) : []);
 
-/** Replaces the variables a shell can't: ${workspaceFolder} and friends. ${env:X} becomes $X. */
+/** An input's options as { label, value }. */
+export const optionsOf = (input) => (Array.isArray(input?.options) ? input.options : [])
+  .map((o) => (o && typeof o === "object" ? { label: String(o.label ?? o.value), value: String(o.value) } : { label: String(o), value: String(o) }));
+
+/** The inputs an item asks for, in the order its steps first use them, its dependsOn and
+ *  preLaunchTask included. Each is { id, type, description, options, default }. */
+export function inputsFor(item, ctx) {
+  const ids = [];
+  const seen = new Set();
+  const visit = (task) => {
+    if (!task || seen.has(task)) return;
+    seen.add(task);
+    for (const dep of [].concat(task.dependsOn ?? [])) visit(ctx.tasks.find((t) => t?.label === (typeof dep === "string" ? dep : dep?.label ?? dep?.task)));
+    if (task.preLaunchTask) visit(ctx.tasks.find((t) => t?.label === task.preLaunchTask));
+    const { dependsOn: _d, preLaunchTask: _p, ...own } = task;
+    for (const str of strings(own)) for (const m of str.matchAll(/\$\{input:([^}]+)\}/g)) if (!ids.includes(m[1])) ids.push(m[1]);
+  };
+  visit(item.cfg);
+  return ids.map((id) => ctx.inputs?.[id]).filter((i) => ASKABLE.has(i?.type))
+    .map((i) => ({ id: i.id, type: i.type, description: i.description ?? i.id, options: optionsOf(i), default: i.default == null ? "" : String(i.default), password: i.password === true }));
+}
+
+/** Answers for an item's inputs: the last ones given where they're still valid, else each default. */
+export function answersFor(inputs, last = {}) {
+  const out = {};
+  for (const i of inputs) {
+    const prev = last?.[i.id];
+    const ok = typeof prev === "string" && (i.type !== "pickString" || i.options.some((o) => o.value === prev));
+    out[i.id] = ok ? prev : i.type === "pickString" && !i.options.some((o) => o.value === i.default) ? i.options[0]?.value ?? "" : i.default;
+  }
+  return out;
+}
+
+/** Replaces the variables a shell can't: ${workspaceFolder} and friends, and ${input:id} with its
+ *  answer, else its default. ${env:X} becomes $X. */
 export function resolver(ctx) {
   return (v) => {
     if (typeof v !== "string") return v;
     return v
+      .replace(/\$\{input:([^}]+)\}/g, (m, id) => ctx.answers?.[id] ?? (ctx.inputs?.[id]?.default != null ? String(ctx.inputs[id].default) : m))
       .replace(/\$\{workspaceFolder:([^}]+)\}/g, (m, n) => ctx.folders[n] ?? m)
       .replace(/\$\{workspace(Folder|Root)\}/g, ctx.ws)
       .replace(/\$\{workspaceFolderBasename\}/g, baseName(ctx.ws))
@@ -140,11 +196,46 @@ export function taskSteps(label, ctx, seen = new Set()) {
   const type = task.type ?? "process";
   const command = valueOf(task.command);
   const args = (task.args ?? []).map(valueOf);
-  const ask = [command, ...args, task.options?.cwd, task.path, task.script].map(asks).find(Boolean);
+  const { dependsOn: _d, ...own } = task;
+  const ask = strings(own).map(asker(ctx)).find(Boolean);
   if (ask) return unsupported(`uses ${ask}, which only VS Code can answer`);
   const cwd = r(task.options?.cwd) || ctx.ws;
   const env = envOf(task.options?.env, r);
-  if (type === "npm") {
+  if (type === "docker-build") {
+    const b = task.dockerBuild ?? {};
+    if (!b.tag && !b.context) return unsupported("docker-build without dockerBuild");
+    const line = ["docker build",
+      b.dockerfile ? `--file ${quote(r(b.dockerfile))}` : "",
+      b.tag ? `--tag ${quote(r(b.tag))}` : "",
+      b.target ? `--target ${quote(r(b.target))}` : "",
+      b.platform ? `--platform ${quote(r(b.platform))}` : "",
+      b.pull ? "--pull" : "",
+      ...Object.entries(b.buildArgs ?? {}).map(([k, v]) => `--build-arg ${quote(`${k}=${r(String(v))}`)}`),
+      ...Object.entries(b.labels ?? {}).filter(([k]) => k !== "includeDefaults").map(([k, v]) => `--label ${quote(`${k}=${r(String(v))}`)}`),
+      b.customOptions ? r(String(b.customOptions)) : "",
+      quote(r(b.context ?? "${workspaceFolder}"))].filter(Boolean).join(" ");
+    steps.push({ cwd, env, line });
+  } else if (type === "docker-run") {
+    const d = task.dockerRun ?? {};
+    if (!d.image) return unsupported("docker-run without an image");
+    const name = d.containerName ? r(d.containerName) : null;
+    // VS Code's debug mode starts the Python file through its debugger; here it runs plainly.
+    const py = task.python ?? {};
+    const entry = !d.command && (py.file || py.module) ? ["--entrypoint python3", quote(r(d.image)), py.module ? `-m ${quote(r(py.module))}` : quote(r(py.file)), words((py.args ?? []).map(r))] : [quote(r(d.image)), d.command ? r(String(d.command)) : ""];
+    const line = [
+      // A container left from an earlier run would hold the name.
+      ...(name ? [`{ docker rm -f ${quote(name)} >/dev/null 2>&1 || true; } &&`] : []),
+      "docker run --rm -it",
+      name ? `--name ${quote(name)}` : "",
+      d.network ? `--network ${quote(r(d.network))}` : "",
+      ...(d.ports ?? []).map((p) => `--publish ${quote(`${p.hostPort ? `${p.hostPort}:` : ""}${p.containerPort}${p.protocol ? `/${p.protocol}` : ""}`)}`),
+      ...(d.volumes ?? []).map((v) => `--volume ${quote(`${r(v.localPath)}:${r(v.containerPath)}${v.permissions === "ro" ? ":ro" : ""}`)}`),
+      ...(d.envFiles ?? []).map((f) => `--env-file ${quote(r(f))}`),
+      ...Object.entries(d.env ?? {}).map(([k, v]) => `--env ${quote(`${k}=${r(String(v))}`)}`),
+      d.customOptions ? r(String(d.customOptions)) : "",
+      ...entry].filter(Boolean).join(" ");
+    steps.push({ cwd, env, line });
+  } else if (type === "npm") {
     if (!task.script) return unsupported("npm task without a script");
     steps.push({ cwd: task.path ? resolvePath(ctx.ws, r(task.path)) : cwd, env, line: `npm run ${quote(task.script)}` });
   } else if (type === "shell" || type === "process") {
@@ -165,8 +256,8 @@ export function taskSteps(label, ctx, seen = new Set()) {
 export function configSteps(cfg, ctx) {
   const r = resolver(ctx);
   const type = cfg?.type ?? "";
-  const fields = [cfg?.program, cfg?.module, cfg?.command, cfg?.cwd, cfg?.envFile, ...(cfg?.args ?? []), ...(cfg?.runtimeArgs ?? [])];
-  const ask = fields.map(asks).find(Boolean);
+  const { preLaunchTask: _p, ...own } = cfg ?? {};
+  const ask = strings(own).map(asker(ctx)).find(Boolean);
   if (ask) return unsupported(`uses ${ask}, which only VS Code can answer`);
   const before = [];
   if (cfg.preLaunchTask) {
@@ -178,6 +269,11 @@ export function configSteps(cfg, ctx) {
   const env = envOf(cfg.env, r);
   const envFile = cfg.envFile ? r(cfg.envFile) : null;
   let line;
+  // A Docker launch only attaches VS Code's debugger to what its preLaunchTask starts: run that task.
+  if (type === "docker") {
+    if (!before.length) return unsupported("docker configuration without a preLaunchTask");
+    return { steps: before };
+  }
   if (type === "node-terminal") {
     if (!cfg.command) return unsupported("node-terminal without a command");
     line = r(cfg.command);
@@ -187,7 +283,11 @@ export function configSteps(cfg, ctx) {
   } else if (type === "python" || type === "debugpy") {
     const target = cfg.module ? `-m ${quote(r(cfg.module))}` : cfg.program ? quote(r(cfg.program)) : null;
     if (!target) return unsupported("python without a program or module");
-    line = [quote(r(cfg.python) || "python3"), target, words(cfg.args?.map(r))].filter(Boolean).join(" ");
+    // VS Code runs the interpreter picked for the folder: here the configuration's `python`, the
+    // workspace's python.defaultInterpreterPath, else a venv in the folder, else python3.
+    const chosen = r(cfg.python) || r(ctx.settings?.["python.defaultInterpreterPath"]);
+    const py = chosen ? quote(chosen) : `"\${py:-python3}"`;
+    line = [chosen ? "" : `py=$(ls .venv/bin/python .venv*/bin/python venv/bin/python 2>/dev/null | head -n1) &&`, py, target, words(cfg.args?.map(r))].filter(Boolean).join(" ");
   } else {
     return unsupported(`"${type || "unknown"}" configurations need VS Code's debugger`);
   }

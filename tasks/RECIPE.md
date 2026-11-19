@@ -24,6 +24,12 @@ configurations run without a debugger. A finished run keeps its output and says 
     `dim`, with the reason on hover.
   - "No tasks.json, launch.json or .code-workspace here or in the folders above." when empty, and a
     parse error in `blocked`.
+- **The questions**, in place of the list when Play is pressed on an item that uses `${input:…}`.
+  With such items the popup opens at least 480px tall. A 40px header: "Run" and the item's name in
+  `muted`. Then each input the item uses, its `dependsOn` and `preLaunchTask` included, in the order
+  they first appear: its `description` in 11.5px `dim`, then a `pickString`'s options as 22px pills
+  that wrap, the chosen one on `accent`, or a `promptString` as a 28px text box. A 48px footer
+  holds Back and an `accent` Run button with the play icon. Enter runs, Esc goes back.
 
 ## How it behaves
 
@@ -49,6 +55,11 @@ configurations run without a debugger. A finished run keeps its output and says 
   kind and name. `tab.new` doesn't say which tab it made, so the start is put in `tasks.pending`, and
   the bar copy finds the new tab with that name every 500 ms, for up to 20 s. A tab that's gone
   drops its item. Clicking a running chip's name selects its space and tab.
+- **Inputs:** a `pickString` or `promptString` input is asked for before the run. Each starts at the
+  answer given last for that machine and workspace folder, kept in shared state `tasks.answers`,
+  else at its `default`. A pick no longer among the options falls back to the default. An input
+  defined in both `tasks` and `launch` is read from `tasks`. Restart reuses the last answers without
+  asking.
 - **Restart** closes the tab and starts the item again. **Stop** closes the tab with `tab.close`
   `confirmed: true`.
 
@@ -56,11 +67,22 @@ What runs:
 
 - Tasks of type `shell`, `process` and `npm`, with `dependsOn` first, `options.cwd`, `options.env`,
   and the `osx` or `linux` section laid over the task.
+- Tasks of type `docker-build`, as `docker build` with `dockerfile`, `tag`, `target`, `platform`,
+  `pull`, `buildArgs`, `labels`, `customOptions` and `context`.
+- Tasks of type `docker-run`, as `docker run --rm -it` in the foreground, after removing a container
+  of the same `containerName`. It passes `network`, `ports`, `volumes` with `ro`, `envFiles`, `env`,
+  `customOptions`, the image and `command`. A `python.file` or `python.module` runs with
+  `--entrypoint python3` and `python.args`, without the debugger VS Code would add.
 - Launch configurations of type `node` and `pwa-node`, `node-terminal`, and `python` or `debugpy`,
-  with `cwd`, `env`, `envFile` and `preLaunchTask`.
+  with `cwd`, `env`, `envFile` and `preLaunchTask`. Python runs the configuration's `python`, else
+  the workspace's `python.defaultInterpreterPath` setting, else the first of `.venv/bin/python`,
+  `.venv*/bin/python` and `venv/bin/python` in the folder, else `python3`.
+- Launch configurations of type `docker`: VS Code only attaches its debugger to what the
+  `preLaunchTask` starts, so they run that task.
 - Variables: `${workspaceFolder}`, `${workspaceFolder:Name}`, `${workspaceRoot}`,
-  `${workspaceFolderBasename}`, `${userHome}` on this computer, `${pathSeparator}`, `${/}`, and
-  `${env:NAME}` handed to the shell as `$NAME`.
+  `${workspaceFolderBasename}`, `${userHome}` of the machine the steps run on, read once per machine
+  with `sh -c 'printf %s "$HOME"'`, `${pathSeparator}`, `${/}`, `${input:id}` for `pickString` and
+  `promptString` inputs, and `${env:NAME}` handed to the shell as `$NAME`.
 
 ## Built from
 
@@ -71,7 +93,8 @@ What runs:
   `{ "id": "tasks", "type": "block", "size": { "px": 300 }, "content": { "mod": "tasks" } }`. The chip is
   right-aligned in its block, so a fixed slot on the right of the status row keeps it next to what follows.
 - `herdr`: `spaces`, `panes`, `focused`, `readTextFile` and `exec` with `on`, `openOverlay`,
-  `closeOverlay`, `shared`, `setShared`, `run`, `theme`, `window`, `home`, `props`.
+  `closeOverlay`, `shared`, `setShared`, `run`, `theme`, `window`, `home`, `props`. From
+  `gpui-base`: `Input` and `InputState` for `promptString` answers.
 - Commands: `tab.new`, `tab.close`, `space.select`, `tab.select`. Programs: `find`, `sh`, and
   whatever the items run.
 
@@ -79,8 +102,8 @@ What runs:
 
 - A popup's timers stop when it closes, so only the bar copy settles new tabs; the popup only writes
   `tasks.pending`.
-- Task types from VS Code extensions, such as `docker-build`, `docker-run` or `aws-sam`, and
-  variables only VS Code can answer, such as `${input:…}`, `${command:…}`, `${file}` or `${config:…}`,
+- Other task types from VS Code extensions, such as `aws-sam` or `docker-compose`, inputs of type
+  `command`, and variables only VS Code can answer, such as `${command:…}`, `${file}` or `${config:…}`,
   can't run. Those items show why on hover.
 - `dependsOrder: "parallel"` still runs one after another.
 - Launch configurations run without a debugger: breakpoints need VS Code.
@@ -97,5 +120,9 @@ What runs:
   `✓`. A task whose command exits 1 says "✖ … failed (exit 1)" and shows `✗`. Enter closes the tab
   and the mark goes.
 - Stop closes the tab at once; Ctrl+C in the tab does too.
-- A `docker-build` task shows `dim` with "need a VS Code extension" on hover.
+- A task using `${input:model}`, a `pickString`, shows the questions on Play with the default picked;
+  picking another option and Run opens the tab with it, and the next Play starts at that option.
+- A `docker` launch configuration with a `docker-run` `preLaunchTask` runs its `dependsOn`, then
+  `docker build`, then `docker run` in the tab.
+- An `aws-sam` task shows `dim` with "need a VS Code extension" on hover.
 - Focusing a terminal in a folder without any of the files hides the Run chip.
