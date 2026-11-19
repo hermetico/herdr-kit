@@ -7,6 +7,7 @@ Small mods for the [Herdr](https://herdr.dev) desktop app.
 | [tasks](tasks/RECIPE.md) | Runs VS Code tasks and launch configurations from the status bar, `.code-workspace` files included. Asks for `${input:…}` values first and runs Docker build and run tasks. A chip per running task restarts or stops it. |
 | [keep-awake](keep-awake/RECIPE.md) | A cup in the status bar that keeps your Mac's display awake while it's on. |
 | [theme-switch](theme-switch/RECIPE.md) | A palette in the status bar that picks any theme, light, dark or following the system, without changing the layout. Comes with Catppuccin, Tokyo Night and Ayu in all their variants. |
+| [pane-plus](pane-plus/RECIPE.md) | Herdr's pane header with a mark on a zoomed pane, a tinted header with a dashed accent line, and no zoom button on a tab's only pane. |
 | [spotify-mini](spotify-mini/RECIPE.md) | A Spotify miniplayer for the sidebar, with cover, progress and controls, or a compact status-bar slot. Talks to the Mac app: no sign-in. |
 
 ## Install
@@ -30,6 +31,7 @@ herdr-app check tasks/mods/tasks
 herdr-app check keep-awake/mods/keep-awake
 herdr-app check spotify-mini/mods/spotify-mini
 herdr-app check theme-switch/mods/theme-switch
+herdr-app check pane-plus/mods/pane-plus
 ```
 
 ## License

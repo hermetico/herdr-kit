@@ -1,0 +1,42 @@
+# Pane plus
+
+Herdr's pane header, cloned from the shipped `pane` mod of herdr-app 0.1.16, with two changes: a
+zoomed pane is marked, and a tab's only pane has no zoom button.
+
+## What you see
+
+- The shipped header: the program's icon, the agent's name or the terminal's title, the folder in
+  `dim`, the agent's status, and on hover the split right, split down, zoom and close buttons.
+- **A zoomed pane:** the header is on `accent` at 8% instead of `background`, and its edge toward
+  the terminal is a 1px dashed `accent` line instead of the solid `border` one. The zoom button
+  shows the unzoom icon, in the same place.
+- **A tab's only pane** has no zoom button, since zooming it changes nothing. A zoomed pane always
+  keeps it, so there's a way back.
+
+## Built from
+
+- `mods/pane-plus/`: `main.js`, `mod.json` and the shipped header's five icons.
+- `herdr`: `panes` for `zoomed` and the other panes of the tab, `layout` for the header's position,
+  `run("pane.zoom")`, `pane.split`, `pane.close`, `pane.focus`.
+- Placed as the header of the layout's pane frames:
+
+  ```json
+  { "tab": "active", "pane": { "header": { "content": { "mod": "pane-plus" }, "height": 30, "position": "top" } } }
+  ```
+
+## Install
+
+Copy `mods/pane-plus` into `~/.config/herdr-app/mods/`, then name it in your layout's pane header
+in place of `pane`.
+
+## Watch out
+
+- Herdr draws the pane frame itself, with only a width and a color for the border and the focused
+  border. Neither can be dashed or change on zoom, so the mark lives in the header.
+- When herdr-app updates its own `pane` mod, compare it with this one and carry the changes over.
+
+## Done when
+
+- `herdr-app check pane-plus/mods/pane-plus` passes.
+- Zooming a pane turns its header accent-tinted with a dashed accent line; unzooming restores it.
+- Hovering the header of a tab's only pane shows split and close but no zoom.
