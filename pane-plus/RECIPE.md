@@ -42,7 +42,8 @@ in place of `pane`.
 - Herdr draws the pane frame itself, with only a width and a color for the border and the focused
   border. Neither can be dashed or change on zoom, so the mark lives in the header.
 - Without spaces-plus, a pane only learns that its machine is unavailable, so every down state gets
-  the no-signal icon.
+  the no-signal icon. A shared status that says a machine is down while its layout is ready is
+  taken as stale and ignored, unless it's a brief reconnect.
 - When herdr-app updates its own `pane` mod, compare it with this one and carry the changes over.
 
 ## Done when

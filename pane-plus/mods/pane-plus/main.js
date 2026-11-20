@@ -53,8 +53,11 @@ function link(p) {
   const machine = spaces().find((w) => w.tabs?.some((x) => x.id === p.tab))?.machine;
   if (!machine) return null;
   const known = shared("machines.status")?.[machine];
-  if (known) return { machine, ...known };
-  return machines().some((m) => m.name === machine && m.layout === "unavailable") ? { machine, kind: "unreachable" } : null;
+  const layout = machines().find((m) => m.name === machine)?.layout;
+  // A machine whose layout is ready is up: a status saying otherwise is stale, unless it's a brief
+  // reconnect the layout hasn't caught up with.
+  if (known && (layout !== "ready" || known.kind === "reconnecting")) return { machine, ...known };
+  return layout === "unavailable" ? { machine, kind: "unreachable" } : null;
 }
 
 function mark(t, p) {
