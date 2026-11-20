@@ -1,7 +1,7 @@
 # Pane plus
 
-Herdr's pane header, cloned from the shipped `pane` mod of herdr-app 0.1.16, with two changes: a
-zoomed pane is marked, and a tab's only pane has no zoom button.
+Herdr's pane header, cloned from the shipped `pane` mod of herdr-app 0.1.16, with three changes: a
+zoomed pane is marked, a tab's only pane has no zoom button, and a pane whose machine is down says so.
 
 ## What you see
 
@@ -13,10 +13,16 @@ zoomed pane is marked, and a tab's only pane has no zoom button.
 - **A tab's only pane** has no zoom button, since zooming it changes nothing. A zoomed pane always
   keeps it, so there's a way back.
 
+- **A pane on a machine that isn't connected** gets a 12px mark after the program's icon: a
+  `working` spinner while it reconnects or logs in, a `blocked` no-signal icon while it's
+  unreachable, an `accent` fingerprint while it needs a login. Its tooltip names the machine, the
+  state and how long, like `gpu-box: reconnecting · 12 s`. Local and connected panes show nothing.
+
 ## Built from
 
-- `mods/pane-plus/`: `main.js`, `mod.json` and the shipped header's five icons.
-- `herdr`: `panes` for `zoomed` and the other panes of the tab, `layout` for the header's position,
+- `mods/pane-plus/`: `main.js`, `mod.json`, the shipped header's five icons, and `wifi-off.svg` and `fingerprint.svg` from lucide.
+- `herdr`: `panes` for `zoomed` and the other panes of the tab, `spaces` for the pane's machine,
+  `shared("machines.status")`, which spaces-plus fills, and `machines` when it isn't there, `layout` for the header's position,
   `run("pane.zoom")`, `pane.split`, `pane.close`, `pane.focus`.
 - Placed as the header of the layout's pane frames:
 
@@ -33,6 +39,8 @@ in place of `pane`.
 
 - Herdr draws the pane frame itself, with only a width and a color for the border and the focused
   border. Neither can be dashed or change on zoom, so the mark lives in the header.
+- Without spaces-plus, a pane only learns that its machine is unavailable, so every down state gets
+  the no-signal icon.
 - When herdr-app updates its own `pane` mod, compare it with this one and carry the changes over.
 
 ## Done when

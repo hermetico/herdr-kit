@@ -5,10 +5,12 @@
 // this pane. Props from the app: { pane, terminal }. Click: focus the pane.
 // pane-plus: a zoomed pane says so. Its header turns accent-tinted with a dashed 1px accent edge
 // toward the terminal.
+// pane-plus: a pane on another machine that isn't connected gets a small mark before its name,
+// from the state spaces-plus shares as `machines.status`.
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, props, run, theme, home, layout } from "herdr";
+import { panes, props, run, theme, home, layout, spaces, machines, shared } from "herdr";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -35,6 +37,34 @@ function folder(cwd) {
   if (!cwd) return "";
   const h = home();
   return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
+}
+
+const WORDS = { reconnecting: "reconnecting", logging: "logging in", unreachable: "not connected", login: "needs a login", typing: "needs a login" };
+
+function since(ms) {
+  if (!ms) return "";
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  return s < 60 ? ` · ${s} s` : s < 3600 ? ` · ${Math.floor(s / 60)}m` : ` · ${Math.floor(s / 3600)}h`;
+}
+
+// The machine a pane runs on and what its connection is doing, or null for a connected or local one.
+// Without spaces-plus there's no shared state, and an unavailable machine is just not connected.
+function link(p) {
+  const machine = spaces().find((w) => w.tabs?.some((x) => x.id === p.tab))?.machine;
+  if (!machine) return null;
+  const known = shared("machines.status")?.[machine];
+  if (known) return { machine, ...known };
+  return machines().some((m) => m.name === machine && m.layout === "unavailable") ? { machine, kind: "unreachable" } : null;
+}
+
+function mark(t, p) {
+  const l = link(p);
+  if (!l) return null;
+  const tip = `${l.machine}: ${WORDS[l.kind] ?? "not connected"}${since(l.since)}`;
+  const box = div().id(`ph-link-${p.pane}`).flex_none().flex().items_center().tooltip(tip);
+  if (l.kind === "reconnecting" || l.kind === "logging") return box.child(svg("mods/workspace-chrome/spinner.svg").size(12).text_color(t.working).spin(900));
+  const login = l.kind === "login" || l.kind === "typing";
+  return box.child(svg(`mods/pane-plus/${login ? "fingerprint" : "wifi-off"}.svg`).size(12).text_color(login ? t.accent : t.blocked));
 }
 
 export default class Pane extends View {
@@ -68,6 +98,7 @@ export default class Pane extends View {
     const pane = p.pane;
     const bottom = paneFrame(layout())?.header?.position === "bottom";
     const zoomed = p.zoomed;
+    const down = mark(t, p);
     return h_flex()
       .id(`pane-head-${pane}`)
       .size_full()
@@ -83,6 +114,7 @@ export default class Pane extends View {
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
       .on_click(() => run("pane.focus", { pane }))
       .when(Boolean(pic), (el) => el.child(pic))
+      .when(Boolean(down), (el) => el.child(down))
       .child(div().flex_none().truncate().max_w(260).font_medium().text_color(t.foreground).child(name))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
       .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
