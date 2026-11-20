@@ -13,14 +13,16 @@ zoomed pane is marked, a tab's only pane has no zoom button, and a pane whose ma
 - **A tab's only pane** has no zoom button, since zooming it changes nothing. A zoomed pane always
   keeps it, so there's a way back.
 
-- **A pane on a machine that isn't connected** gets a 12px mark after the program's icon: a
-  `working` spinner while it reconnects or logs in, a `blocked` no-signal icon while it's
+- **A pane on a machine that isn't connected** gets a 12px mark at the header's left edge, before the program's icon: a
+  dashed ring in `ansi4` blue that turns slowly while it reconnects, so it never looks like the
+  agent's spinner, an `accent` fingerprint while it logs in, a `blocked` no-signal icon while it's
   unreachable, an `accent` fingerprint while it needs a login. Its tooltip names the machine, the
   state and how long, like `gpu-box: reconnecting · 12 s`. Local and connected panes show nothing.
 
 ## Built from
 
-- `mods/pane-plus/`: `main.js`, `mod.json`, the shipped header's five icons, and `wifi-off.svg` and `fingerprint.svg` from lucide.
+- `mods/pane-plus/`: `main.js`, `mod.json`, the shipped header's five icons, `wifi-off.svg` and `fingerprint.svg` from lucide, and
+  `dashed-spinner.svg`.
 - `herdr`: `panes` for `zoomed` and the other panes of the tab, `spaces` for the pane's machine,
   `shared("machines.status")`, which spaces-plus fills, and `machines` when it isn't there, `layout` for the header's position,
   `run("pane.zoom")`, `pane.split`, `pane.close`, `pane.focus`.

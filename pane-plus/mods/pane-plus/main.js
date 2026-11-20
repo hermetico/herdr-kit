@@ -62,7 +62,9 @@ function mark(t, p) {
   if (!l) return null;
   const tip = `${l.machine}: ${WORDS[l.kind] ?? "not connected"}${since(l.since)}`;
   const box = div().id(`ph-link-${p.pane}`).flex_none().flex().items_center().tooltip(tip);
-  if (l.kind === "reconnecting" || l.kind === "logging") return box.child(svg("mods/workspace-chrome/spinner.svg").size(12).text_color(t.working).spin(900));
+  // A dashed ring in blue, slower than the agent's spinner, so the two never read alike.
+  if (l.kind === "reconnecting") return box.child(svg("mods/pane-plus/dashed-spinner.svg").size(12).text_color(t.ansi4).spin(2400));
+  if (l.kind === "logging") return box.child(svg("mods/pane-plus/fingerprint.svg").size(12).text_color(t.accent));
   const login = l.kind === "login" || l.kind === "typing";
   return box.child(svg(`mods/pane-plus/${login ? "fingerprint" : "wifi-off"}.svg`).size(12).text_color(login ? t.accent : t.blocked));
 }
@@ -113,8 +115,8 @@ export default class Pane extends View {
       .text_size(12)
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
       .on_click(() => run("pane.focus", { pane }))
-      .when(Boolean(pic), (el) => el.child(pic))
       .when(Boolean(down), (el) => el.child(down))
+      .when(Boolean(pic), (el) => el.child(pic))
       .child(div().flex_none().truncate().max_w(260).font_medium().text_color(t.foreground).child(name))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
       .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
